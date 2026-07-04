@@ -1,0 +1,100 @@
+{
+  "project_info": {
+    "project_number": "189365128699",
+    "project_id": "revive-spring",
+    "storage_bucket": "revive-spring.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:189365128699:android:ff37630fcd14f509930f5e",
+        "android_client_info": {
+          "package_name": "com.example.revive_spring"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "189365128699-b2d9nrs9600fna4j68r3gr9c7q95329o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.revive_spring",
+            "certificate_hash": "fe19a7cd8a18941c81eb44a23b89b09a10ed3cde"
+          }
+        },
+        {
+          "client_id": "189365128699-ue3d0945ktfvlbkdodk7h7u51rlvj3e2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.revive_spring",
+            "certificate_hash": "1b8040e2791378a4415ddf65f35d0bc8af040dce"
+          }
+        },
+        {
+          "client_id": "189365128699-0kg8gj0711d2vgtasrq9518g6e026hm7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjffbkc962HWX91GhdDfPHw6y7kaXfnQw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "189365128699-0kg8gj0711d2vgtasrq9518g6e026hm7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:189365128699:android:2edbe8ad39335624930f5e",
+        "android_client_info": {
+          "package_name": "com.revivespring"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "189365128699-ttbfchss7ufr09mddeflvmkn82u8s307.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.revivespring",
+            "certificate_hash": "fe19a7cd8a18941c81eb44a23b89b09a10ed3cde"
+          }
+        },
+        {
+          "client_id": "189365128699-uas0u35avj5s43p0truu0aubq7ae0fq8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.revivespring",
+            "certificate_hash": "e4733bfeefaca0bccb824b4ab0cd2df627d38b6c"
+          }
+        },
+        {
+          "client_id": "189365128699-0kg8gj0711d2vgtasrq9518g6e026hm7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjffbkc962HWX91GhdDfPHw6y7kaXfnQw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "189365128699-0kg8gj0711d2vgtasrq9518g6e026hm7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
