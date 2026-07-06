@@ -165,7 +165,6 @@ class NotificationService {
     await initialize();
     await Workmanager().initialize(
       notificationSyncCallbackDispatcher,
-      isInDebugMode: kDebugMode,
     );
     _backgroundSchedulerReady = true;
   }
