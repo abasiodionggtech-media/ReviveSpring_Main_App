@@ -1,1 +1,10 @@
 
+cd /workspaces/ReviveSpring_Main_App
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH="$JAVA_HOME/bin:$PATH"
+flutter build appbundle --release --dart-define-from-file=env/release.json
+
+
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH="$JAVA_HOME/bin:$PATH"
+flutter build apk --release --dart-define-from-file=env/release.json
