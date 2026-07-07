@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_controller.dart';
 import '../../widgets/app_buttons.dart';
-import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_panel.dart';
 
 class MentorshipScreen extends StatefulWidget {
@@ -191,6 +190,7 @@ class _MentorshipScreenState extends State<MentorshipScreen> {
                           ),
                           AnimatedPrimaryButton(
                             label: 'Request',
+                            icon: Icons.person_add_alt_1,
                             busy: busy,
                             onPressed: busy ? null : () => _requestMentor(mentor['mentor_user_id'].toString()),
                           ),
