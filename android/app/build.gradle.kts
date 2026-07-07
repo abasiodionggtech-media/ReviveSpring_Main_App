@@ -65,27 +65,30 @@ android {
     signingConfigs {
         create("release") {
             if (keystorePropertiesFile.exists()) {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
+                val storeFilePath = keystoreProperties["storeFile"] as? String
+                val storePasswordValue = keystoreProperties["storePassword"] as? String
+                val keyAliasValue = keystoreProperties["keyAlias"] as? String
+                val keyPasswordValue = keystoreProperties["keyPassword"] as? String
+
+                if (!storeFilePath.isNullOrBlank() && !storePasswordValue.isNullOrBlank() && !keyAliasValue.isNullOrBlank() && !keyPasswordValue.isNullOrBlank()) {
+                    keyAlias = keyAliasValue
+                    keyPassword = keyPasswordValue
+                    storeFile = file(storeFilePath)
+                    storePassword = storePasswordValue
+                } else {
+                    throw GradleException("android/key.properties is missing required signing values. Copy android/key.properties.example and fill in your release keystore details.")
+                }
+            } else {
+                throw GradleException("android/key.properties is required for release signing. Copy android/key.properties.example and configure your release keystore.")
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                // Local fallback only. Play/App release builds should use android/key.properties.
-                signingConfigs.getByName("debug")
-            }
-            
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
-            // --- ADDED THIS ONE LINE BELOW TO FIX THE SHRINKING ERROR ---
             isShrinkResources = false
-            // -------------------------------------------------------------
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
