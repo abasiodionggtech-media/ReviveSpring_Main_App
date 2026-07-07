@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -8,6 +6,7 @@ import '../core/app_controller.dart';
 import '../core/app_stage.dart';
 import '../data/app_data.dart';
 import '../widgets/app_buttons.dart';
+import '../widgets/premium_upgrade_sheet.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.controller});
@@ -18,207 +17,295 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+String? _firstOrNull(List? list) {
+  if (list == null || list.isEmpty) return null;
+  return list.first.toString();
+}
+
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final Map<int, Set<String>> answers = {};
-  bool committed = false;
-  bool commitFxActive = false;
-  bool commitFlowBusy = false;
-  int commitFxSeed = 0;
-  Offset commitFxOrigin = const Offset(0, 0);
+  final Map<String, dynamic> answers = {};
   int reminderHour = 9;
   int reminderMinute = 0;
+  bool useDifferentEmail = false;
+  bool submitting = false;
+  late final TextEditingController nameController;
+  late final TextEditingController emailController;
 
   AppController get controller => widget.controller;
-  OnboardingSlideData get slide => onboardingSlides[controller.onboardingIndex];
+  OnboardingStep get step => onboardingSteps[controller.onboardingIndex];
 
-  bool get needsAnswer {
-    return switch (slide.kind) {
-      OnboardingSlideKind.topic ||
-      OnboardingSlideKind.multiChoice ||
-      OnboardingSlideKind.singleChoice ||
-      OnboardingSlideKind.statement ||
-      OnboardingSlideKind.builder => true,
-      _ => false,
-    };
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController(text: controller.user?.fullName ?? '');
+    emailController = TextEditingController(text: controller.user?.email ?? '');
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    super.dispose();
   }
 
   bool get canContinue {
-    if (slide.kind == OnboardingSlideKind.commit) return committed;
-    if (!needsAnswer) return true;
-    return (answers[controller.onboardingIndex] ?? {}).isNotEmpty;
+    if (step.optional) return true;
+    switch (step.type) {
+      case OnboardingStepType.singleChoice:
+        return answers[step.id] != null;
+      case OnboardingStepType.multiChoice:
+        return ((answers[step.id] as List?)?.isNotEmpty ?? false);
+      case OnboardingStepType.profileSetup:
+        return nameController.text.trim().isNotEmpty;
+      case OnboardingStepType.tour:
+      case OnboardingStepType.reminder:
+      case OnboardingStepType.emailConfirm:
+      case OnboardingStepType.premium:
+      case OnboardingStepType.summary:
+        return true;
+    }
   }
 
-  void toggleAnswer(String option) {
+  void selectSingle(String label) {
+    HapticFeedback.selectionClick();
+    setState(() => answers[step.id] = label);
+  }
+
+  void toggleMulti(OnboardingOption option) {
+    HapticFeedback.selectionClick();
     setState(() {
-      final selected = answers.putIfAbsent(
-        controller.onboardingIndex,
-        () => <String>{},
-      );
-      if (slide.multiSelect) {
-        selected.contains(option)
-            ? selected.remove(option)
-            : selected.add(option);
-      } else {
-        selected
+      final current = List<String>.from(answers[step.id] as List? ?? const []);
+      if (option.exclusive) {
+        current
           ..clear()
-          ..add(option);
+          ..add(option.label);
+      } else {
+        // Selecting a non-exclusive option always clears any exclusive pick.
+        for (final other in step.options) {
+          if (other.exclusive) current.remove(other.label);
+        }
+        if (current.contains(option.label)) {
+          current.remove(option.label);
+        } else {
+          final max = step.maxSelect;
+          if (max != null && current.length >= max) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('You can choose up to $max.'),
+                backgroundColor: AppColors.deepEmerald,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            return;
+          }
+          current.add(option.label);
+        }
       }
+      answers[step.id] = current;
     });
   }
 
   Future<void> continueFlow() async {
-    if (!canContinue) return;
-    if (controller.onboardingIndex == onboardingSlides.length - 1) {
-      await controller.saveOnboarding({
-        for (final entry in answers.entries)
-          'slide_${entry.key}': entry.value.toList(),
-        'committed': committed,
-        'reminderTime': {
-          'hour': reminderHour,
-          'minute': reminderMinute,
-          'timezone': DateTime.now().timeZoneName,
-          'dailyEmailEnabled': true,
-          'pushNotificationsEnabled': false,
-        },
-      });
-      controller.go(AppStage.app);
+    if (!canContinue || submitting) return;
+    if (step.type == OnboardingStepType.summary) {
+      await _finish();
     } else {
       controller.nextOnboarding();
     }
   }
 
-  Future<void> commitWithTransition(Offset? origin) async {
-    if (commitFlowBusy) return;
-    commitFlowBusy = true;
-    if (mounted) {
-      setState(() {
-        committed = true;
-        commitFxActive = true;
-        commitFxSeed += 1;
-        commitFxOrigin =
-            origin ?? (MediaQuery.sizeOf(context).center(Offset.zero));
-      });
+  Future<void> _finish() async {
+    setState(() => submitting = true);
+    final newName = nameController.text.trim();
+    if (newName.isNotEmpty && newName != controller.user?.fullName) {
+      await controller.updateFullName(newName);
     }
-    await Future<void>.delayed(const Duration(milliseconds: 860));
-    await continueFlow();
-    if (mounted) {
-      setState(() => commitFxActive = false);
+
+    final pref = answers['notificationPreference'] as String?;
+    bool wantsPush = false;
+    bool wantsEmail = true;
+    switch (pref) {
+      case 'Push notifications on my phone':
+        wantsPush = true;
+        wantsEmail = false;
+        break;
+      case 'Daily prayer email':
+        wantsPush = false;
+        wantsEmail = true;
+        break;
+      case 'Both push and email':
+        wantsPush = true;
+        wantsEmail = true;
+        break;
+      case "Neither — I'll open the app myself":
+        wantsPush = false;
+        wantsEmail = false;
+        break;
     }
-    commitFlowBusy = false;
+
+    await controller.saveOnboarding({
+      ...answers,
+      'preferredContactEmail': useDifferentEmail ? emailController.text.trim() : controller.user?.email,
+      'reminderTime': {
+        'hour': reminderHour,
+        'minute': reminderMinute,
+        'timezone': DateTime.now().timeZoneName,
+        'dailyEmailEnabled': wantsEmail,
+        'pushNotificationsEnabled': wantsPush,
+      },
+    });
+    if (!mounted) return;
+    controller.go(AppStage.app);
+  }
+
+  String get _primaryLabel {
+    switch (step.type) {
+      case OnboardingStepType.tour:
+        return 'Get Started';
+      case OnboardingStepType.premium:
+        return 'Continue with Free';
+      case OnboardingStepType.summary:
+        return 'Begin My Prayer Journey';
+      default:
+        return 'Continue';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final index = controller.onboardingIndex;
-    final isLast = index == onboardingSlides.length - 1;
     return Scaffold(
       backgroundColor: const Color(0xFF121715),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 22),
-          child: Stack(
+          child: Column(
             children: [
-              Column(
-                children: [
-                  _OnboardingHeader(
-                    index: index,
-                    total: onboardingSlides.length,
-                    onBack: index == 0 || commitFxActive
-                        ? null
-                        : controller.previousOnboarding,
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 280),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: _OnboardingBody(
-                        key: ValueKey(index),
-                        slide: slide,
-                        index: index,
-                        selected: answers[index] ?? <String>{},
-                        committed: committed,
-                        onSelected: toggleAnswer,
-                        onCommitted: commitWithTransition,
-                        reminderHour: reminderHour,
-                        reminderMinute: reminderMinute,
-                        onReminderChanged: (hour, minute) => setState(() {
-                          reminderHour = hour;
-                          reminderMinute = minute;
-                        }),
-                      ),
-                    ),
-                  ),
-                  AnimatedPrimaryButton(
-                    label:
-                        slide.primaryLabel ??
-                        (isLast ? 'Enter ReviveSpring' : 'Continue'),
-                    icon: Icons.arrow_forward,
-                    onPressed: (canContinue && !commitFxActive)
-                        ? continueFlow
-                        : null,
-                  ),
-                ],
+              _OnboardingHeader(
+                index: index,
+                total: onboardingSteps.length,
+                section: step.section,
+                onBack: index == 0 ? null : controller.previousOnboarding,
               ),
-              if (commitFxActive)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: TweenAnimationBuilder<double>(
-                      key: ValueKey(commitFxSeed),
-                      tween: Tween(begin: 0, end: 1),
-                      duration: const Duration(milliseconds: 860),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, child) {
-                        final radius =
-                            36 +
-                            (MediaQuery.sizeOf(context).longestSide *
-                                1.8 *
-                                value);
-                        return Stack(
-                          children: [
-                            Positioned(
-                              left: commitFxOrigin.dx - radius,
-                              top: commitFxOrigin.dy - radius,
-                              child: Container(
-                                width: radius * 2,
-                                height: radius * 2,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: RadialGradient(
-                                    colors: [
-                                      const Color(
-                                        0xFF2FA06D,
-                                      ).withValues(alpha: 0.95),
-                                      AppColors.deepEmerald.withValues(
-                                        alpha: 0.96,
-                                      ),
-                                      AppColors.deepEmerald.withValues(
-                                        alpha: 0.88,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned.fill(
-                              child: ColoredBox(
-                                color: AppColors.deepEmerald.withValues(
-                                  alpha: value * 0.7,
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+              const SizedBox(height: 20),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(begin: const Offset(0, .05), end: Offset.zero).animate(animation),
+                      child: child,
                     ),
+                  ),
+                  child: SingleChildScrollView(
+                    key: ValueKey(index),
+                    physics: const BouncingScrollPhysics(),
+                    child: _buildBody(),
                   ),
                 ),
+              ),
+              const SizedBox(height: 16),
+              AnimatedPrimaryButton(
+                label: _primaryLabel,
+                icon: Icons.arrow_forward,
+                busy: submitting,
+                onPressed: canContinue && !submitting ? continueFlow : null,
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildBody() {
+    switch (step.type) {
+      case OnboardingStepType.tour:
+        return _TourCarousel(step: step);
+      case OnboardingStepType.singleChoice:
+        return _ChoiceList(
+          step: step,
+          selected: {if (answers[step.id] != null) answers[step.id] as String},
+          onTap: (option) => selectSingle(option.label),
+          onSkip: step.optional ? continueFlow : null,
+        );
+      case OnboardingStepType.multiChoice:
+        return _ChoiceList(
+          step: step,
+          selected: Set<String>.from(answers[step.id] as List? ?? const []),
+          onTap: toggleMulti,
+        );
+      case OnboardingStepType.reminder:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StepTitle(step: step),
+            const SizedBox(height: 22),
+            _ReminderCard(
+              hour: reminderHour,
+              minute: reminderMinute,
+              onChanged: (hour, minute) => setState(() {
+                reminderHour = hour;
+                reminderMinute = minute;
+              }),
+            ),
+          ],
+        );
+      case OnboardingStepType.emailConfirm:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StepTitle(step: step),
+            const SizedBox(height: 22),
+            _EmailConfirmCard(
+              email: controller.user?.email ?? '',
+              useDifferentEmail: useDifferentEmail,
+              emailController: emailController,
+              onToggle: (value) => setState(() => useDifferentEmail = value),
+            ),
+          ],
+        );
+      case OnboardingStepType.profileSetup:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StepTitle(step: step),
+            const SizedBox(height: 22),
+            _ProfileSetupCard(
+              nameController: nameController,
+              photoUrl: controller.user?.photoUrl,
+              onChanged: () => setState(() {}),
+            ),
+          ],
+        );
+      case OnboardingStepType.premium:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StepTitle(step: step),
+            const SizedBox(height: 22),
+            _PremiumCard(onUpgrade: () => PremiumUpgradeSheet.show(context, controller)),
+          ],
+        );
+      case OnboardingStepType.summary:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _StepTitle(step: step),
+            const SizedBox(height: 22),
+            _SummaryCard(
+              name: nameController.text.trim().isNotEmpty ? nameController.text.trim() : (controller.user?.fullName ?? 'Friend'),
+              language: controller.language,
+              topFocus: _firstOrNull(answers['spiritualGoals'] as List?) ?? _firstOrNull(answers['prayerFocus'] as List?),
+              reminderHour: reminderHour,
+              reminderMinute: reminderMinute,
+            ),
+          ],
+        );
+    }
   }
 }
 
@@ -226,11 +313,13 @@ class _OnboardingHeader extends StatelessWidget {
   const _OnboardingHeader({
     required this.index,
     required this.total,
+    required this.section,
     required this.onBack,
   });
 
   final int index;
   final int total;
+  final String section;
   final VoidCallback? onBack;
 
   @override
@@ -245,9 +334,9 @@ class _OnboardingHeader extends StatelessWidget {
         Expanded(
           child: Column(
             children: [
-              const Text(
-                'About you',
-                style: TextStyle(
+              Text(
+                section,
+                style: const TextStyle(
                   color: AppColors.iconCream,
                   fontWeight: FontWeight.w900,
                   fontSize: 17,
@@ -260,7 +349,7 @@ class _OnboardingHeader extends StatelessWidget {
                   value: (index + 1) / total,
                   minHeight: 5,
                   backgroundColor: Colors.white.withValues(alpha: .12),
-                  color: AppColors.iconCream,
+                  color: AppColors.sproutGreen,
                 ),
               ),
             ],
@@ -272,512 +361,527 @@ class _OnboardingHeader extends StatelessWidget {
   }
 }
 
-class _OnboardingBody extends StatelessWidget {
-  const _OnboardingBody({
-    super.key,
-    required this.slide,
-    required this.index,
-    required this.selected,
-    required this.committed,
-    required this.onSelected,
-    required this.onCommitted,
-    required this.reminderHour,
-    required this.reminderMinute,
-    required this.onReminderChanged,
-  });
+class _StepTitle extends StatelessWidget {
+  const _StepTitle({required this.step});
 
-  final OnboardingSlideData slide;
-  final int index;
-  final Set<String> selected;
-  final bool committed;
-  final ValueChanged<String> onSelected;
-  final ValueChanged<Offset?> onCommitted;
-  final int reminderHour;
-  final int reminderMinute;
-  final void Function(int hour, int minute) onReminderChanged;
+  final OnboardingStep step;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const BouncingScrollPhysics(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 16),
         Text(
-          slide.title,
-          textAlign: TextAlign.center,
+          step.title,
           style: const TextStyle(
             color: AppColors.iconCream,
-            fontSize: 30,
-            height: 1.15,
+            fontSize: 24,
             fontWeight: FontWeight.w900,
+            height: 1.25,
           ),
         ),
-        if (slide.body != null &&
-            slide.kind != OnboardingSlideKind.builder &&
-            slide.kind != OnboardingSlideKind.commit) ...[
-          const SizedBox(height: 14),
+        if (step.subtitle != null) ...[
+          const SizedBox(height: 8),
           Text(
-            slide.body!,
-            textAlign: TextAlign.center,
+            step.subtitle!,
             style: TextStyle(
-              color: AppColors.iconCream.withValues(alpha: .58),
-              fontSize: 17,
-              height: 1.35,
+              color: AppColors.iconCream.withValues(alpha: .68),
               fontWeight: FontWeight.w700,
+              fontSize: 14,
             ),
           ),
         ],
-        const SizedBox(height: 36),
-        switch (slide.kind) {
-          OnboardingSlideKind.topic ||
-          OnboardingSlideKind.multiChoice ||
-          OnboardingSlideKind.singleChoice => _OptionList(
-            slide: slide,
-            selected: selected,
-            onSelected: onSelected,
-          ),
-          OnboardingSlideKind.statement => _StatementChoice(
-            slide: slide,
-            selected: selected,
-            onSelected: onSelected,
-          ),
-          OnboardingSlideKind.chart => const _ChartCard(),
-          OnboardingSlideKind.reminder => _ReminderCard(
-            hour: reminderHour,
-            minute: reminderMinute,
-            onChanged: onReminderChanged,
-          ),
-          OnboardingSlideKind.summary => _SummaryCard(slide: slide),
-          OnboardingSlideKind.builder => _BuilderCard(
-            slide: slide,
-            index: index,
-            selected: selected,
-            onSelected: onSelected,
-          ),
-          OnboardingSlideKind.commit => _CommitCard(
-            committed: committed,
-            onCommitted: onCommitted,
-          ),
-          OnboardingSlideKind.info => _InfoCard(slide: slide, index: index),
-        },
       ],
     );
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.slide, required this.index});
+class _ChoiceList extends StatelessWidget {
+  const _ChoiceList({required this.step, required this.selected, required this.onTap, this.onSkip});
 
-  final OnboardingSlideData slide;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    if (slide.icon == Icons.reviews_outlined) {
-      return Column(
-        children: const [
-          _ReviewCard(
-            name: 'Carol',
-            text:
-                'I used to feel lost trying to study the Bible. Now, every morning I wake up filled with joy and purpose.',
-          ),
-          SizedBox(height: 14),
-          _ReviewCard(
-            name: 'Alex',
-            text:
-                "This app speaks to my heart where I'm at and helps me build a real relationship with God.",
-          ),
-          SizedBox(height: 14),
-          _ReviewCard(
-            name: 'Mike',
-            text:
-                'It breaks spiritual growth into bite-size steps I can actually live out each day.',
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        _Illustration(icon: slide.icon, color: slide.color, index: index),
-        const SizedBox(height: 24),
-        if (slide.body != null)
-          Text(
-            slide.body!,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.iconCream.withValues(alpha: .62),
-              fontSize: 16,
-              height: 1.45,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _OptionList extends StatelessWidget {
-  const _OptionList({
-    required this.slide,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final OnboardingSlideData slide;
+  final OnboardingStep step;
   final Set<String> selected;
-  final ValueChanged<String> onSelected;
+  final ValueChanged<OnboardingOption> onTap;
+  final VoidCallback? onSkip;
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final option in slide.options) ...[
-          _OptionTile(
-            label: option,
-            checked: selected.contains(option),
-            square: slide.multiSelect,
-            onTap: () => onSelected(option),
+        _StepTitle(step: step),
+        const SizedBox(height: 22),
+        ...step.options.map((option) {
+          final isSelected = selected.contains(option.label);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _OptionTile(option: option, selected: isSelected, onTap: () => onTap(option)),
+          );
+        }),
+        if (onSkip != null)
+          Center(
+            child: TextButton(
+              onPressed: onSkip,
+              child: Text(
+                'Skip this step',
+                style: TextStyle(color: AppColors.iconCream.withValues(alpha: .6), fontWeight: FontWeight.w700),
+              ),
+            ),
           ),
-          const SizedBox(height: 14),
-        ],
       ],
     );
   }
 }
 
 class _OptionTile extends StatelessWidget {
-  const _OptionTile({
-    required this.label,
-    required this.checked,
-    required this.square,
-    required this.onTap,
-  });
+  const _OptionTile({required this.option, required this.selected, required this.onTap});
 
-  final String label;
-  final bool checked;
-  final bool square;
+  final OnboardingOption option;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 19),
-        decoration: BoxDecoration(
-          color: checked
-              ? AppColors.deepEmerald.withValues(alpha: .48)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: checked
-                ? AppColors.iconCream.withValues(alpha: .46)
-                : Colors.white.withValues(alpha: .18),
-            width: 1.5,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: selected ? AppColors.leafGreen : Colors.white.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: selected ? AppColors.sproutGreen : Colors.white.withValues(alpha: .12)),
+        boxShadow: selected
+            ? [BoxShadow(color: AppColors.leafGreen.withValues(alpha: .35), blurRadius: 18, offset: const Offset(0, 8))]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+            child: Row(
+              children: [
+                Text(option.emoji, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    option.label,
+                    style: const TextStyle(color: AppColors.iconCream, fontWeight: FontWeight.w700, height: 1.3, fontSize: 15),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 200),
+                  scale: selected ? 1 : 0,
+                  child: const Icon(Icons.check_circle, color: AppColors.iconCream, size: 22),
+                ),
+              ],
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: AppColors.iconCream,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: checked ? AppColors.iconCream : Colors.transparent,
-                borderRadius: BorderRadius.circular(square ? 8 : 99),
-                border: Border.all(
-                  color: checked
-                      ? AppColors.iconCream
-                      : Colors.white.withValues(alpha: .22),
-                  width: 2,
-                ),
-              ),
-              child: checked
-                  ? Icon(
-                      Icons.check,
-                      color: AppColors.deepEmerald,
-                      size: square ? 22 : 20,
-                    )
-                  : null,
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-class _StatementChoice extends StatelessWidget {
-  const _StatementChoice({
-    required this.slide,
-    required this.selected,
-    required this.onSelected,
-  });
+class _TourCarousel extends StatefulWidget {
+  const _TourCarousel({required this.step});
 
-  final OnboardingSlideData slide;
-  final Set<String> selected;
-  final ValueChanged<String> onSelected;
+  final OnboardingStep step;
+
+  @override
+  State<_TourCarousel> createState() => _TourCarouselState();
+}
+
+class _TourCarouselState extends State<_TourCarousel> {
+  final controller = PageController();
+  int page = 0;
+
+  static const _blurbs = [
+    'Guided daily prayers for every season of life.',
+    'Capture your thoughts and celebrate answered prayers.',
+    'Small, honest steps that build a lasting habit.',
+  ];
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 80),
-        _QuoteCard(text: slide.statement ?? ''),
-        const SizedBox(height: 120),
-        Row(
-          children: [
-            for (final option in slide.options) ...[
-              Expanded(
-                child: _LargeChoice(
-                  label: option,
-                  icon: option.toLowerCase().startsWith('n')
-                      ? Icons.close
-                      : Icons.check,
-                  checked: selected.contains(option),
-                  onTap: () => onSelected(option),
+        _StepTitle(step: widget.step),
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 260,
+          child: PageView.builder(
+            controller: controller,
+            itemCount: widget.step.options.length,
+            onPageChanged: (value) => setState(() => page = value),
+            itemBuilder: (context, index) {
+              final option = widget.step.options[index];
+              return AnimatedPadding(
+                duration: const Duration(milliseconds: 200),
+                padding: EdgeInsets.symmetric(vertical: page == index ? 0 : 14, horizontal: 8),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.deepEmerald.withValues(alpha: .8), Colors.white.withValues(alpha: .05)],
+                    ),
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(color: Colors.white.withValues(alpha: .14)),
+                  ),
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(option.emoji, style: const TextStyle(fontSize: 46)),
+                      const SizedBox(height: 18),
+                      Text(
+                        option.label,
+                        style: const TextStyle(color: AppColors.iconCream, fontSize: 20, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _blurbs[index % _blurbs.length],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.iconCream.withValues(alpha: .74), height: 1.4),
+                      ),
+                    ],
+                  ),
                 ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(widget.step.options.length, (index) {
+            final active = index == page;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              width: active ? 22 : 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: active ? AppColors.sproutGreen : Colors.white.withValues(alpha: .25),
+                borderRadius: BorderRadius.circular(99),
               ),
-              if (option != slide.options.last) const SizedBox(width: 18),
-            ],
-          ],
+            );
+          }),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: Text(
+            'Swipe to preview',
+            style: TextStyle(color: AppColors.iconCream.withValues(alpha: .5), fontSize: 12, fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     );
   }
 }
 
-class _QuoteCard extends StatelessWidget {
-  const _QuoteCard({required this.text});
+class _EmailConfirmCard extends StatelessWidget {
+  const _EmailConfirmCard({
+    required this.email,
+    required this.useDifferentEmail,
+    required this.emailController,
+    required this.onToggle,
+  });
 
-  final String text;
+  final String email;
+  final bool useDifferentEmail;
+  final TextEditingController emailController;
+  final ValueChanged<bool> onToggle;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.topCenter,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: double.infinity,
-          margin: const EdgeInsets.only(top: 26),
-          padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: AppColors.deepEmerald.withValues(alpha: .38),
-            borderRadius: BorderRadius.circular(14),
+            color: Colors.white.withValues(alpha: .06),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: .14)),
           ),
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: AppColors.iconCream,
-              fontSize: 20,
-              height: 1.35,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        Positioned(
-          top: 0,
-          child: Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF1B211F),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: .16),
-                width: 2,
+          child: Row(
+            children: [
+              const Icon(Icons.mail_outline, color: AppColors.iconCream),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(email, style: const TextStyle(color: AppColors.iconCream, fontWeight: FontWeight.w800, fontSize: 16)),
               ),
-            ),
-            child: const Icon(
-              Icons.format_quote,
-              color: AppColors.iconCream,
-              size: 30,
-            ),
+            ],
           ),
         ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _PillChoice(label: 'This is correct ✓', selected: !useDifferentEmail, onTap: () => onToggle(false)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _PillChoice(label: 'Update email', selected: useDifferentEmail, onTap: () => onToggle(true)),
+            ),
+          ],
+        ),
+        if (useDifferentEmail) ...[
+          const SizedBox(height: 16),
+          TextField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(color: AppColors.iconCream),
+            decoration: InputDecoration(
+              hintText: 'name@example.com',
+              hintStyle: TextStyle(color: AppColors.iconCream.withValues(alpha: .4)),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: .06),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'This sets where your daily devotional is sent. To change your account login email, use Settings later.',
+            style: TextStyle(color: AppColors.iconCream.withValues(alpha: .55), fontSize: 12, height: 1.4),
+          ),
+        ],
       ],
     );
   }
 }
 
-class _LargeChoice extends StatelessWidget {
-  const _LargeChoice({
-    required this.label,
-    required this.icon,
-    required this.checked,
-    required this.onTap,
-  });
+class _PillChoice extends StatelessWidget {
+  const _PillChoice({required this.label, required this.selected, required this.onTap});
 
   final String label;
-  final IconData icon;
-  final bool checked;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        height: 190,
-        decoration: BoxDecoration(
-          color: checked
-              ? AppColors.deepEmerald.withValues(alpha: .5)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: checked
-                ? AppColors.iconCream.withValues(alpha: .48)
-                : Colors.white.withValues(alpha: .18),
-            width: 1.5,
+    return Material(
+      color: selected ? AppColors.leafGreen : Colors.white.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.iconCream, fontWeight: FontWeight.w800, fontSize: 13),
           ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: checked
-                  ? AppColors.iconCream
-                  : Colors.white.withValues(alpha: .09),
-              child: Icon(
-                icon,
-                color: checked ? AppColors.deepEmerald : AppColors.iconCream,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.iconCream,
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-class _ReviewCard extends StatelessWidget {
-  const _ReviewCard({required this.name, required this.text});
+class _ProfileSetupCard extends StatelessWidget {
+  const _ProfileSetupCard({required this.nameController, required this.photoUrl, required this.onChanged});
 
-  final String name;
-  final String text;
+  final TextEditingController nameController;
+  final String? photoUrl;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.iconCream.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Photo uploads are coming soon.'), backgroundColor: AppColors.deepEmerald),
+          ),
+          child: Stack(
             children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  color: AppColors.iconCream,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+              CircleAvatar(
+                radius: 46,
+                backgroundColor: Colors.white.withValues(alpha: .08),
+                backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty) ? NetworkImage(photoUrl!) : null,
+                child: (photoUrl == null || photoUrl!.isEmpty)
+                    ? const Icon(Icons.person_outline, color: AppColors.iconCream, size: 40)
+                    : null,
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(color: AppColors.leafGreen, shape: BoxShape.circle),
+                  child: const Icon(Icons.camera_alt_outlined, color: AppColors.iconCream, size: 16),
                 ),
               ),
-              const Spacer(),
-              for (var i = 0; i < 5; i++)
-                const Icon(Icons.star, color: AppColors.iconCream, size: 18),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            text,
-            style: const TextStyle(
-              color: AppColors.iconCream,
-              fontSize: 18,
-              height: 1.35,
-              fontWeight: FontWeight.w800,
-            ),
+        ),
+        const SizedBox(height: 8),
+        Text('Photo optional', style: TextStyle(color: AppColors.iconCream.withValues(alpha: .5), fontSize: 12)),
+        const SizedBox(height: 22),
+        TextField(
+          controller: nameController,
+          onChanged: (_) => onChanged(),
+          textCapitalization: TextCapitalization.words,
+          style: const TextStyle(color: AppColors.iconCream, fontSize: 16, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            labelText: 'First name',
+            labelStyle: TextStyle(color: AppColors.iconCream.withValues(alpha: .6)),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: .06),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _ChartCard extends StatelessWidget {
-  const _ChartCard();
+class _PremiumCard extends StatelessWidget {
+  const _PremiumCard({required this.onUpgrade});
+
+  final VoidCallback onUpgrade;
+
+  static const _highlights = [
+    ('💬', 'Unlimited AI Prayer Companion chat'),
+    ('🧘', 'Full Mental Wellness content library'),
+    ('🚫', 'No ads, ever'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final bars = [
-      ('Spiritual\nGrowth', .92, AppColors.sproutGreen),
-      ('Addiction\nHealing', .46, AppColors.leafGreen),
-      ('Decision\nMaking', .60, AppColors.iconCream),
-      ('Relationships', .74, AppColors.baseEarth),
-    ];
-    return Container(
-      height: 320,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.iconCream.withValues(alpha: .09),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (final bar in bars) ...[
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    bar.$1,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.iconCream,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FractionallySizedBox(
-                    heightFactor: 1,
-                    child: Container(
-                      height: 220 * bar.$2,
-                      decoration: BoxDecoration(
-                        color: bar.$3.withValues(alpha: .86),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.deepEmerald, Colors.white.withValues(alpha: .05)],
             ),
-            if (bar != bars.last) const SizedBox(width: 14),
-          ],
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white.withValues(alpha: .14)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final item in _highlights)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Text(item.$1, style: const TextStyle(fontSize: 20)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(item.$2, style: const TextStyle(color: AppColors.iconCream, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 6),
+              AnimatedPrimaryButton(label: 'Upgrade to Premium', icon: Icons.workspace_premium_outlined, onPressed: onUpgrade),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.name,
+    required this.language,
+    required this.topFocus,
+    required this.reminderHour,
+    required this.reminderMinute,
+  });
+
+  final String name;
+  final String language;
+  final String? topFocus;
+  final int reminderHour;
+  final int reminderMinute;
+
+  @override
+  Widget build(BuildContext context) {
+    final hour12 = reminderHour % 12 == 0 ? 12 : reminderHour % 12;
+    final period = reminderHour >= 12 ? 'PM' : 'AM';
+    final time = '${hour12.toString().padLeft(2, '0')}:${reminderMinute.toString().padLeft(2, '0')} $period';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "You're ready, $name! 🎉",
+          style: const TextStyle(color: AppColors.iconCream, fontSize: 24, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 18),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .06),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: .14)),
+          ),
+          child: Column(
+            children: [
+              _SummaryRow(icon: Icons.language, label: 'Language', value: language.toUpperCase()),
+              if (topFocus != null) _SummaryRow(icon: Icons.favorite_outline, label: 'Top focus', value: topFocus!),
+              _SummaryRow(icon: Icons.schedule_outlined, label: 'Daily reminder', value: time),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Everything is set. Tap below whenever you are ready to begin.',
+          style: TextStyle(color: AppColors.iconCream.withValues(alpha: .65), height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.icon, required this.label, required this.value});
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.sproutGreen, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label, style: TextStyle(color: AppColors.iconCream.withValues(alpha: .7), fontWeight: FontWeight.w700))),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(color: AppColors.iconCream, fontWeight: FontWeight.w900),
+            ),
+          ),
         ],
       ),
     );
@@ -1049,380 +1153,6 @@ class _ReminderWheelState<T> extends State<_ReminderWheel<T>> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.slide});
-
-  final OnboardingSlideData slide;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _Illustration(icon: slide.icon, color: slide.color, index: 3),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                slide.body ?? '',
-                style: const TextStyle(
-                  color: AppColors.iconCream,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const Icon(Icons.check_circle_outline, color: AppColors.iconCream),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _BuilderCard extends StatelessWidget {
-  const _BuilderCard({
-    required this.slide,
-    required this.index,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final OnboardingSlideData slide;
-  final int index;
-  final Set<String> selected;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final builderStep = index - (onboardingSlides.length - 4);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var i = 0; i < builderStep; i++) ...[
-          _BuildProgress(label: i == 0 ? 'Goals' : 'Growth areas', done: true),
-          const SizedBox(height: 18),
-        ],
-        _BuildProgress(label: slide.body ?? 'Personal path', done: false),
-        const SizedBox(height: 34),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withValues(alpha: .2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'To move forward, specify',
-                style: TextStyle(
-                  color: AppColors.iconCream.withValues(alpha: .5),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                slide.statement ?? '',
-                style: const TextStyle(
-                  color: AppColors.iconCream,
-                  fontSize: 24,
-                  height: 1.2,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  for (final option in slide.options) ...[
-                    Expanded(
-                      child: _BuilderButton(
-                        label: option,
-                        checked: selected.contains(option),
-                        onTap: () => onSelected(option),
-                      ),
-                    ),
-                    if (option != slide.options.last) const SizedBox(width: 18),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 220),
-        const Center(
-          child: Text(
-            '#1 Christian platform\nfor spiritual growth',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.iconCream,
-              fontSize: 18,
-              height: 1.25,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BuildProgress extends StatelessWidget {
-  const _BuildProgress({required this.label, required this.done});
-
-  final String label;
-  final bool done;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.iconCream,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const Spacer(),
-            done
-                ? const Icon(Icons.check_circle, color: AppColors.iconCream)
-                : const Text(
-                    '49%',
-                    style: TextStyle(
-                      color: AppColors.iconCream,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(99),
-          child: LinearProgressIndicator(
-            value: done ? 1 : .49,
-            minHeight: 5,
-            color: AppColors.iconCream,
-            backgroundColor: Colors.white.withValues(alpha: .12),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BuilderButton extends StatelessWidget {
-  const _BuilderButton({
-    required this.label,
-    required this.checked,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool checked;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: onTap,
-      style: FilledButton.styleFrom(
-        backgroundColor: checked
-            ? AppColors.iconCream
-            : AppColors.iconCream.withValues(alpha: .12),
-        foregroundColor: checked ? AppColors.deepEmerald : AppColors.iconCream,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-      ),
-    );
-  }
-}
-
-class _CommitCard extends StatefulWidget {
-  const _CommitCard({required this.committed, required this.onCommitted});
-
-  final bool committed;
-  final ValueChanged<Offset?> onCommitted;
-
-  @override
-  State<_CommitCard> createState() => _CommitCardState();
-}
-
-class _CommitCardState extends State<_CommitCard> {
-  Timer? _haptics;
-  bool _holding = false;
-
-  void _startHaptics() {
-    if (_holding) return;
-    _holding = true;
-    HapticFeedback.mediumImpact();
-    _haptics = Timer.periodic(const Duration(milliseconds: 85), (_) {
-      HapticFeedback.selectionClick();
-    });
-    setState(() {});
-  }
-
-  void _stopHaptics() {
-    _holding = false;
-    _haptics?.cancel();
-    _haptics = null;
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _haptics?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final committed = widget.committed;
-    return Column(
-      children: [
-        Text(
-          "This isn't a big vow - it's a small yes to growing with God. Here's what you're saying yes to:\n\n"
-          "- A few moments each day with God's Word.\n"
-          "- A safe space to reflect and recharge.\n\n"
-          'ReviveSpring is here to walk with you, not pressure you.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: AppColors.iconCream,
-            fontSize: 20,
-            height: 1.35,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 72),
-        Text(
-          committed ? 'Committed' : 'Press and hold to commit',
-          style: TextStyle(
-            color: AppColors.iconCream.withValues(alpha: .55),
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 24),
-        GestureDetector(
-          onLongPressStart: (_) => _startHaptics(),
-          onLongPressCancel: _stopHaptics,
-          onLongPressEnd: (details) {
-            _stopHaptics();
-            widget.onCommitted(details.globalPosition);
-          },
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 140),
-            scale: _holding ? 1.06 : 1,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              width: 132,
-              height: 132,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: committed ? AppColors.iconCream : AppColors.deepEmerald,
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (committed
-                                ? AppColors.iconCream
-                                : AppColors.deepEmerald)
-                            .withValues(alpha: _holding ? .5 : .28),
-                    blurRadius: _holding ? 42 : 24,
-                    spreadRadius: _holding ? 6 : 1,
-                  ),
-                ],
-              ),
-              child: Icon(
-                committed ? Icons.check : Icons.touch_app_outlined,
-                color: committed ? AppColors.deepEmerald : AppColors.iconCream,
-                size: 50,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Illustration extends StatelessWidget {
-  const _Illustration({
-    required this.icon,
-    required this.color,
-    required this.index,
-  });
-
-  final IconData icon;
-  final Color color;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 260,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.iconCream.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: -30,
-            top: 24,
-            child: _SoftCircle(size: 150, color: color),
-          ),
-          Positioned(
-            right: -20,
-            bottom: -28,
-            child: _SoftCircle(size: 190, color: AppColors.iconCream),
-          ),
-          Center(
-            child: Container(
-              width: 116,
-              height: 116,
-              decoration: BoxDecoration(
-                color: AppColors.iconCream,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Icon(icon, color: AppColors.deepEmerald, size: 58),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SoftCircle extends StatelessWidget {
-  const _SoftCircle({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: .18),
-      ),
     );
   }
 }

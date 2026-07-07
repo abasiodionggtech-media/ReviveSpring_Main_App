@@ -15,10 +15,39 @@ const onboardingRoutes= require('./routes/onboarding');
 const libraryRoutes   = require('./routes/library');
 const dailyVerseRoutes= require('./routes/dailyVerse');
 const adminRoutes     = require('./routes/admin');
+const notificationRoutes = require('./routes/notifications');
+const monetizationRoutes = require('./routes/monetization');
+const supportRoutes   = require('./routes/support');
+const moodCheckInRoutes = require('./routes/moodCheckIn');
+const dailyMannaRoutes  = require('./routes/dailyManna');
+const declarationsRoutes = require('./routes/declarations');
+const scriptureSearchRoutes = require('./routes/scriptureSearch');
+const aiPrayerWriterRoutes = require('./routes/aiPrayerWriter');
+const challengesRoutes = require('./routes/challenges');
+const fastsRoutes = require('./routes/fasts');
+const readingPlansRoutes = require('./routes/readingPlans');
+const milestonesRoutes = require('./routes/milestones');
+const memoryCardsRoutes = require('./routes/memoryCards');
+const aiCompanionRoutes = require('./routes/aiCompanion');
+const aiSermonSummarizerRoutes = require('./routes/aiSermonSummarizer');
+const dreamJournalRoutes = require('./routes/dreamJournal');
+const growthScoreRoutes = require('./routes/growthScore');
+const worshipRoutes = require('./routes/worship');
+const weeklyReviewRoutes = require('./routes/weeklyReview');
+const mentalHealthRoutes = require('./routes/mentalHealth');
+const prayerChainRoutes = require('./routes/prayerChain');
+const testimoniesRoutes = require('./routes/testimonies');
+const accountabilityRoutes = require('./routes/accountability');
+const prayerGroupsRoutes = require('./routes/prayerGroups');
+const mentorshipRoutes = require('./routes/mentorship');
+const seasonalEventsRoutes = require('./routes/seasonalEvents');
 const { authenticate }      = require('./middleware/auth');
 const { authenticateAdmin } = require('./middleware/adminAuth');
 const prisma = require('./config/prisma');
 const { runDailyPrayerEmailJob } = require('./jobs/dailyPrayerEmail');
+const { runStreakGraceCheckJob } = require('./jobs/streakGraceCheck');
+const { runWeeklyReviewJob } = require('./jobs/weeklyReviewJob');
+const { verifyEmailTransport } = require('./services/email');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -61,8 +90,8 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
-// AI Chat endpoint (public — no auth required for chatting)
-app.post('/api/ai/chat', require('./routes/aiChat'));
+// AI endpoints (chat + conversation history)
+app.use('/api/ai', require('./routes/aiChat'));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -76,6 +105,32 @@ app.use('/api/analytics', authenticate, analyticsRoutes);
 app.use('/api/onboarding', authenticate, onboardingRoutes);
 app.use('/api/library',   authenticate, libraryRoutes);
 app.use('/api/daily-verse', authenticate, dailyVerseRoutes);
+app.use('/api/notifications', authenticate, notificationRoutes);
+app.use('/api/monetization', monetizationRoutes);
+app.use('/api/support',   authenticate, supportRoutes);
+app.use('/api/mood-checkin', authenticate, moodCheckInRoutes);
+app.use('/api/daily-manna',  authenticate, dailyMannaRoutes);
+app.use('/api/declarations', authenticate, declarationsRoutes);
+app.use('/api/scripture-search', authenticate, scriptureSearchRoutes);
+app.use('/api/ai-prayer-writer', authenticate, aiPrayerWriterRoutes);
+app.use('/api/challenges', authenticate, challengesRoutes);
+app.use('/api/fasts', authenticate, fastsRoutes);
+app.use('/api/reading-plans', authenticate, readingPlansRoutes);
+app.use('/api/milestones', authenticate, milestonesRoutes);
+app.use('/api/memory-cards', authenticate, memoryCardsRoutes);
+app.use('/api/ai-companion', authenticate, aiCompanionRoutes);
+app.use('/api/ai-sermon-summarizer', authenticate, aiSermonSummarizerRoutes);
+app.use('/api/dream-journal', authenticate, dreamJournalRoutes);
+app.use('/api/growth-score', authenticate, growthScoreRoutes);
+app.use('/api/worship-tracks', authenticate, worshipRoutes);
+app.use('/api/weekly-review', authenticate, weeklyReviewRoutes);
+app.use('/api/mental-health-content', authenticate, mentalHealthRoutes);
+app.use('/api/prayer-chain', authenticate, prayerChainRoutes);
+app.use('/api/testimonies', authenticate, testimoniesRoutes);
+app.use('/api/accountability', authenticate, accountabilityRoutes);
+app.use('/api/prayer-groups', authenticate, prayerGroupsRoutes);
+app.use('/api/mentorship', authenticate, mentorshipRoutes);
+app.use('/api/seasonal-events', authenticate, seasonalEventsRoutes);
 app.use('/api/admin',     adminRoutes);
 
 // 404
@@ -101,18 +156,38 @@ app.use((err, req, res, _next) => {
     console.error('[DB] Connect error:', err.message);
   }
 
+  try {
+    await verifyEmailTransport();
+  } catch (err) {
+    console.error('[EMAIL] Transport check failed:', err.message);
+  }
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✝  ReviveSpring API on port ${PORT}`);
-    console.log(`   Daily email job: runs every hour`);
+    console.log(`   Daily email job: runs every minute`);
   });
 
   // ── Daily Prayer Email Scheduler ────────────────────────────
-  // Runs once on startup to catch any users missed, then every hour
+  // Runs once on startup, then every minute for exact reminder-time matching
   try { await runDailyPrayerEmailJob(); } catch (e) { console.error('[JOB] Startup run error:', e.message); }
   setInterval(async () => {
     try { await runDailyPrayerEmailJob(); }
-    catch (e) { console.error('[JOB] Hourly run error:', e.message); }
+    catch (e) { console.error('[JOB] Minute run error:', e.message); }
+  }, 60 * 1000);
+
+  // ── Prayer Streak Grace-Period Check ────────────────────────
+  try { await runStreakGraceCheckJob(); } catch (e) { console.error('[JOB] Streak grace startup error:', e.message); }
+  setInterval(async () => {
+    try { await runStreakGraceCheckJob(); }
+    catch (e) { console.error('[JOB] Streak grace hourly error:', e.message); }
   }, 60 * 60 * 1000);
+
+  // ── Weekly Spiritual Review — effectively runs every Sunday ──
+  try { await runWeeklyReviewJob(); } catch (e) { console.error('[JOB] Weekly review startup error:', e.message); }
+  setInterval(async () => {
+    try { await runWeeklyReviewJob(); }
+    catch (e) { console.error('[JOB] Weekly review daily error:', e.message); }
+  }, 24 * 60 * 60 * 1000);
 })();
 
 module.exports = app;

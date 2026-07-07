@@ -13,238 +13,347 @@ class VerseData {
   final String ref;
 }
 
-class OnboardingSlideData {
-  const OnboardingSlideData({
-    required this.title,
-    this.body,
-    required this.icon,
-    required this.color,
-    this.kind = OnboardingSlideKind.info,
-    this.options = const [],
-    this.multiSelect = false,
-    this.statement,
-    this.primaryLabel,
-  });
+class OnboardingOption {
+  const OnboardingOption(this.emoji, this.label, {this.exclusive = false});
 
-  final String title;
-  final String? body;
-  final IconData icon;
-  final Color color;
-  final OnboardingSlideKind kind;
-  final List<String> options;
-  final bool multiSelect;
-  final String? statement;
-  final String? primaryLabel;
+  final String emoji;
+  final String label;
+  final bool exclusive; // selecting this clears every other option (e.g. "None of these")
 }
 
-enum OnboardingSlideKind { info, topic, chart, multiChoice, statement, singleChoice, reminder, summary, builder, commit }
+enum OnboardingStepType {
+  tour,
+  singleChoice,
+  multiChoice,
+  reminder,
+  emailConfirm,
+  profileSetup,
+  premium,
+  summary,
+}
 
-const onboardingSlides = [
-  OnboardingSlideData(
-    title: "This is what's possible when Scripture meets real life",
-    body: 'Stories from people finding joy, purpose, and direction with daily guidance.',
-    icon: Icons.reviews_outlined,
-    color: AppColors.deepEmerald,
-    kind: OnboardingSlideKind.info,
-  ),
-  OnboardingSlideData(
-    title: 'Every journey of faith is unique',
-    body: "We'll help you create a path that fits your life, not someone else's.",
-    icon: Icons.church_outlined,
-    color: AppColors.leaf,
-    primaryLabel: "Let's walk together",
-  ),
-  OnboardingSlideData(
-    title: 'Which topic would you like to explore first?',
-    body: 'This will not limit your experience with ReviveSpring.',
-    icon: Icons.explore_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.topic,
-    options: ['Biblical Self Discovery', 'Build Unshakable Faith', 'Parenting', 'Financial Peace', 'Other'],
-  ),
-  OnboardingSlideData(
-    title: "You've already taken a powerful step",
-    body: '86% of users who focused on one topic in their first month found more peace, clarity, and direction.',
-    icon: Icons.bar_chart,
-    color: AppColors.sky,
-    kind: OnboardingSlideKind.chart,
-  ),
-  OnboardingSlideData(
-    title: 'What motivates you to grow spiritually?',
-    body: 'Select all that apply',
-    icon: Icons.spa_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.multiChoice,
-    multiSelect: true,
-    options: ['Becoming a better person', 'Finding deeper meaning', 'Helping others', 'Overcoming struggles', 'Other'],
-  ),
-  OnboardingSlideData(
-    title: 'Do you agree with this statement?',
-    statement: 'Spending time on spiritual growth makes my life feel balanced.',
-    icon: Icons.format_quote,
-    color: AppColors.deepEmerald,
-    kind: OnboardingSlideKind.statement,
-    options: ['No', 'Yes'],
-  ),
-  OnboardingSlideData(
-    title: 'Do you agree with this statement?',
-    statement: "I think the Bible has answers to most of life's questions, but at times, I come across passages that are hard to interpret.",
-    icon: Icons.format_quote,
-    color: AppColors.deepEmerald,
-    kind: OnboardingSlideKind.statement,
-    options: ['No', 'Yes'],
-  ),
-  OnboardingSlideData(
-    title: 'When Scripture feels confusing, we are here to help',
-    body: 'Faith, questions, and the hard days too.',
-    icon: Icons.chat_bubble_outline,
-    color: AppColors.leaf,
-  ),
-  OnboardingSlideData(
-    title: 'Have you ever struggled to live out your beliefs?',
-    icon: Icons.directions_walk,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.singleChoice,
-    options: ['Yes, all the time', 'Sometimes', 'Rarely', 'Never'],
-  ),
-  OnboardingSlideData(
-    title: 'Shift from knowing to living',
-    body: 'Stories from people who felt just like you do now and where they are today.',
-    icon: Icons.auto_stories_outlined,
-    color: AppColors.leaf,
-  ),
-  OnboardingSlideData(
-    title: 'Does this sound familiar?',
-    statement: "I often find my mind wandering when I'm trying to focus on reading.",
-    icon: Icons.format_quote,
-    color: AppColors.deepEmerald,
-    kind: OnboardingSlideKind.statement,
-    options: ['Not really', "That's me"],
-  ),
-  OnboardingSlideData(
-    title: 'How often does life feel too busy for quiet time with God?',
-    icon: Icons.schedule_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.singleChoice,
-    options: ['All the time', 'Sometimes', 'Rarely', 'Never'],
-  ),
-  OnboardingSlideData(
-    title: "Small moments, lasting peace - that's our promise to you",
-    body: "Five minutes each morning to center your heart and carry God's presence through your day.",
-    icon: Icons.favorite_outline,
-    color: AppColors.sky,
-  ),
-  OnboardingSlideData(
-    title: 'How do you usually find God in your day?',
-    body: 'Select all that apply',
-    icon: Icons.light_mode_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.multiChoice,
-    multiSelect: true,
-    options: ['Prayer', 'Worship music', 'Reading the Bible', 'Reflecting in nature', 'Journaling my thoughts', 'Other'],
-  ),
-  OnboardingSlideData(
-    title: 'What if Scripture came to you in your hardest moments?',
-    body: 'Verses chosen for your struggles, with wisdom that turns pain into purpose.',
-    icon: Icons.menu_book_outlined,
-    color: AppColors.leaf,
-  ),
-  OnboardingSlideData(
-    title: 'Which of these describes your ideal devotional experience?',
-    icon: Icons.tune_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.singleChoice,
-    options: ['Simple and actionable', 'Deep and thought-provoking', 'Uplifting and inspiring', 'Guided and structured'],
-  ),
-  OnboardingSlideData(
-    title: 'However you like to connect, we meet you there',
-    body: 'Read, listen, reflect, and grow at your pace.',
-    icon: Icons.headphones_outlined,
-    color: AppColors.leaf,
-  ),
-  OnboardingSlideData(
-    title: "And we don't just add to your reading list - we change how you live",
-    body: 'Short, relevant devotionals that make Scripture applicable and easy.',
-    icon: Icons.reviews_outlined,
-    color: AppColors.leaf,
-  ),
-  OnboardingSlideData(
-    title: 'How much time are you willing to dedicate to your spiritual growth?',
-    icon: Icons.timer_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.singleChoice,
-    options: ['5 min/day - Short', '10 min/day - Average', '15 min/day - Significant', '20 min/day - Dedicated'],
-  ),
-  OnboardingSlideData(
-    title: 'It takes just 21 days to form a new spiritual routine!',
-    body: 'A simple daily rhythm will help you stay on track and keep your goals in view.',
-    icon: Icons.schedule_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.reminder,
-  ),
-  OnboardingSlideData(
-    title: 'What can we help you do?',
-    body: 'This will not limit your experience with ReviveSpring.',
-    icon: Icons.checklist_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.multiChoice,
-    multiSelect: true,
+class OnboardingStep {
+  const OnboardingStep({
+    required this.id,
+    required this.section,
+    required this.title,
+    this.subtitle,
+    this.type = OnboardingStepType.singleChoice,
+    this.options = const [],
+    this.maxSelect,
+    this.optional = false,
+  });
+
+  final String id;
+  final String section;
+  final String title;
+  final String? subtitle;
+  final OnboardingStepType type;
+  final List<OnboardingOption> options;
+  final int? maxSelect; // null = unlimited selections for multiChoice
+  final bool optional; // step can be skipped without an answer
+
+  bool get isMultiChoice => type == OnboardingStepType.multiChoice;
+}
+
+const onboardingSteps = [
+  // ─── Section 1 — Welcome ───────────────────────────────────────────────
+  OnboardingStep(
+    id: 'tour',
+    section: 'Welcome',
+    title: 'ReviveMe is your daily space for prayer, growth, and peace.',
+    type: OnboardingStepType.tour,
     options: [
-      "Hear God's voice more clearly",
-      'Find my calling and next steps',
-      'Understand scripture more deeply',
-      'Heal from past hurts',
-      'Break free from destructive patterns',
-      'Align my life with my beliefs',
+      OnboardingOption('🙏', 'Prayer'),
+      OnboardingOption('📓', 'Journal'),
+      OnboardingOption('✅', 'Daily Goals'),
     ],
   ),
-  OnboardingSlideData(
-    title: "Got it! We'll help you:",
-    body: 'Understand scripture more deeply',
-    icon: Icons.task_alt,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.summary,
+
+  // ─── Section 2 — Faith Background ──────────────────────────────────────
+  OnboardingStep(
+    id: 'faithJourney',
+    section: 'Faith Background',
+    title: 'Where are you on your faith journey right now?',
+    options: [
+      OnboardingOption('🌱', "I'm brand new to Christianity"),
+      OnboardingOption('📖', "I'm growing but still learning"),
+      OnboardingOption('🌳', "I've walked with God for many years"),
+      OnboardingOption('🔄', "I'm returning after a period away"),
+      OnboardingOption('🤔', "I'm exploring and not sure yet"),
+    ],
   ),
-  OnboardingSlideData(
-    title: "Scripture becomes life here! Let's build your daily rhythm",
-    body: 'Daily prayer, Scripture, quizzes, and one-time actions shaped for you.',
-    icon: Icons.dashboard_customize_outlined,
-    color: AppColors.leaf,
+  OnboardingStep(
+    id: 'churchConnection',
+    section: 'Faith Background',
+    title: 'Are you currently connected to a church or faith community?',
+    options: [
+      OnboardingOption('✅', 'Yes, I attend regularly'),
+      OnboardingOption('🔄', 'Sometimes, not consistently'),
+      OnboardingOption('🏠', 'I worship on my own at home'),
+      OnboardingOption('🔍', "I'm looking for a community"),
+      OnboardingOption('❌', 'No, not currently'),
+    ],
   ),
-  OnboardingSlideData(
-    title: 'Creating your personal path...',
-    body: 'Setting goals',
-    icon: Icons.route_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.builder,
-    statement: 'Are you inclined to finish what you start?',
-    options: ['No', 'Yes'],
+  OnboardingStep(
+    id: 'bibleFamiliarity',
+    section: 'Faith Background',
+    title: 'How familiar are you with the Bible?',
+    options: [
+      OnboardingOption('📗', "I'm just starting to read it"),
+      OnboardingOption('📘', 'I know the basics and some stories'),
+      OnboardingOption('📙', 'I read it regularly'),
+      OnboardingOption('📕', 'I study it deeply and consistently'),
+    ],
   ),
-  OnboardingSlideData(
-    title: 'Creating your personal path...',
-    body: 'Adapting growth areas',
-    icon: Icons.route_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.builder,
-    statement: 'Do you tend to stray from the path when faced with challenges?',
-    options: ['No', 'Yes'],
+  OnboardingStep(
+    id: 'salvation',
+    section: 'Faith Background',
+    title: 'Have you made a personal decision to follow Jesus Christ?',
+    options: [
+      OnboardingOption('✝️', 'Yes, I have'),
+      OnboardingOption('🌱', "I'm not sure — I'd like to know more"),
+      OnboardingOption('🙏', "I'd like to make that decision today"),
+      OnboardingOption('🤔', "Not yet, but I'm open"),
+    ],
   ),
-  OnboardingSlideData(
-    title: 'Creating your personal path...',
-    body: 'Picking content',
-    icon: Icons.route_outlined,
-    color: AppColors.leaf,
-    kind: OnboardingSlideKind.builder,
-    statement: 'Do you find it challenging to find the right Bible verse?',
-    options: ['No', 'Yes'],
+
+  // ─── Section 3 — Prayer Needs ───────────────────────────────────────────
+  OnboardingStep(
+    id: 'lifeSeason',
+    section: 'Prayer Needs',
+    title: 'What best describes your life right now?',
+    options: [
+      OnboardingOption('🌊', "I'm going through a very difficult season"),
+      OnboardingOption('⛅', 'Things are okay but I need more peace'),
+      OnboardingOption('☀️', 'Life is good and I want to stay connected'),
+      OnboardingOption('🌱', "I'm in a season of new beginnings"),
+      OnboardingOption('🔄', "I'm in a transition or major change"),
+    ],
   ),
-  OnboardingSlideData(
-    title: 'Commitment pact',
-    body: "This isn't a big vow - it's a small yes to growing with God.",
-    icon: Icons.touch_app_outlined,
-    color: AppColors.deepEmerald,
-    kind: OnboardingSlideKind.commit,
-    primaryLabel: 'Enter ReviveSpring',
+  OnboardingStep(
+    id: 'prayerFocus',
+    section: 'Prayer Needs',
+    title: 'What do you most want to bring to God in prayer?',
+    subtitle: 'Choose up to 3',
+    type: OnboardingStepType.multiChoice,
+    maxSelect: 3,
+    options: [
+      OnboardingOption('😰', 'Anxiety & fear'),
+      OnboardingOption('💔', 'Healing & pain'),
+      OnboardingOption('👨‍👩‍👧', 'Family & relationships'),
+      OnboardingOption('💰', 'Finances & provision'),
+      OnboardingOption('🧭', 'Direction & big decisions'),
+      OnboardingOption('💪', 'Strength & perseverance'),
+      OnboardingOption('😴', 'Sleep, rest & peace of mind'),
+      OnboardingOption('🙌', 'Praise & worship'),
+      OnboardingOption('❤️', 'Salvation of a loved one'),
+      OnboardingOption('🤝', 'Forgiveness & reconciliation'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'emotionalState',
+    section: 'Prayer Needs',
+    title: 'How are you feeling most days lately?',
+    options: [
+      OnboardingOption('😟', 'Overwhelmed and heavy'),
+      OnboardingOption('😐', 'Okay but going through the motions'),
+      OnboardingOption('😌', 'Peaceful but wanting to grow deeper'),
+      OnboardingOption('😊', 'Grateful and full of faith'),
+      OnboardingOption('😔', 'Lonely or disconnected from God'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'mentalWellness',
+    section: 'Prayer Needs',
+    title: 'Do any of these affect your day-to-day life?',
+    subtitle: 'Select all that apply',
+    type: OnboardingStepType.multiChoice,
+    options: [
+      OnboardingOption('😥', 'Anxiety or excessive worry'),
+      OnboardingOption('😞', 'Low mood or depression'),
+      OnboardingOption('😤', 'Stress and burnout'),
+      OnboardingOption('😴', 'Poor sleep'),
+      OnboardingOption('😔', 'Grief or loss'),
+      OnboardingOption('💭', 'Low self-worth'),
+      OnboardingOption('✅', "None of these — I'm doing well", exclusive: true),
+    ],
+  ),
+  OnboardingStep(
+    id: 'prayerUrgency',
+    section: 'Prayer Needs',
+    title: 'Is there something specific you need God to move on right now?',
+    options: [
+      OnboardingOption('🔥', "Yes — I'm in urgent need"),
+      OnboardingOption('🙏', 'Yes — ongoing but not urgent'),
+      OnboardingOption('🌿', 'Not specifically — I just want to grow'),
+      OnboardingOption('🤲', 'I want to learn how to pray more'),
+    ],
+  ),
+
+  // ─── Section 4 — Spiritual Goals ────────────────────────────────────────
+  OnboardingStep(
+    id: 'spiritualGoals',
+    section: 'Spiritual Goals',
+    title: 'What do you most want ReviveMe to help you with?',
+    subtitle: 'Choose up to 2',
+    type: OnboardingStepType.multiChoice,
+    maxSelect: 2,
+    options: [
+      OnboardingOption('🔥', 'Build a consistent daily prayer habit'),
+      OnboardingOption('📖', 'Know and understand the Bible better'),
+      OnboardingOption('☮️', 'Find more peace and calm in life'),
+      OnboardingOption('💪', 'Stay strong through a hard season'),
+      OnboardingOption('🌟', 'Grow closer to God personally'),
+      OnboardingOption('🙌', 'Experience a breakthrough'),
+      OnboardingOption('🧘', 'Improve my mental and emotional wellbeing'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'commitmentLevel',
+    section: 'Spiritual Goals',
+    title: 'How much time can you realistically give to prayer each day?',
+    options: [
+      OnboardingOption('⚡', '5 minutes — short and focused'),
+      OnboardingOption('🕐', '10–15 minutes — a meaningful pause'),
+      OnboardingOption('🕑', '20–30 minutes — deep and unhurried'),
+      OnboardingOption('🕒', 'More than 30 minutes — I want to go deep'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'streakMotivation',
+    section: 'Spiritual Goals',
+    title: 'What keeps you consistent in spiritual habits?',
+    options: [
+      OnboardingOption('🏆', 'Seeing my progress and streaks'),
+      OnboardingOption('🔔', 'Being reminded at the right time'),
+      OnboardingOption('📖', 'Having fresh content every day'),
+      OnboardingOption('👥', 'Knowing others are praying too'),
+      OnboardingOption('🎯', 'Having a clear goal to work toward'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'journeyType',
+    section: 'Spiritual Goals',
+    title: 'What kind of prayer experience do you prefer?',
+    options: [
+      OnboardingOption('📝', 'Written prayers I can read and follow'),
+      OnboardingOption('📖', 'A Bible verse to sit with and reflect on'),
+      OnboardingOption('🎯', 'A short daily action step to live out'),
+      OnboardingOption('🎙️', 'Free, guided conversation with AI'),
+      OnboardingOption('🔀', 'A healthy mix of all of the above'),
+    ],
+  ),
+
+  // ─── Section 5 — Daily Rhythm ───────────────────────────────────────────
+  OnboardingStep(
+    id: 'bestPrayerTime',
+    section: 'Daily Rhythm',
+    title: 'When do you feel most open to prayer?',
+    options: [
+      OnboardingOption('🌅', 'Early morning — before the day begins'),
+      OnboardingOption('☀️', "Mid-morning — once I've settled in"),
+      OnboardingOption('🌤️', 'Afternoon — midday reset'),
+      OnboardingOption('🌆', 'Evening — winding down'),
+      OnboardingOption('🌙', 'Night — quiet before bed'),
+      OnboardingOption('🔀', 'It varies for me'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'reminderTime',
+    section: 'Daily Rhythm',
+    title: 'Set your daily prayer reminder',
+    type: OnboardingStepType.reminder,
+  ),
+  OnboardingStep(
+    id: 'notificationPreference',
+    section: 'Daily Rhythm',
+    title: 'How would you like ReviveMe to reach you?',
+    options: [
+      OnboardingOption('🔔', 'Push notifications on my phone'),
+      OnboardingOption('📧', 'Daily prayer email'),
+      OnboardingOption('📲', 'Both push and email'),
+      OnboardingOption('🔕', "Neither — I'll open the app myself"),
+    ],
+  ),
+  OnboardingStep(
+    id: 'email',
+    section: 'Daily Rhythm',
+    title: 'Your daily prayer email will go to:',
+    type: OnboardingStepType.emailConfirm,
+  ),
+
+  // ─── Section 6 — Faith Personalization ─────────────────────────────────
+  OnboardingStep(
+    id: 'denomination',
+    section: 'Faith Personalization',
+    title: 'Which best describes your Christian background?',
+    subtitle: 'Optional',
+    optional: true,
+    options: [
+      OnboardingOption('✝️', 'Catholic'),
+      OnboardingOption('🕊️', 'Protestant / Evangelical'),
+      OnboardingOption('🙌', 'Pentecostal / Charismatic'),
+      OnboardingOption('✝️', 'Orthodox'),
+      OnboardingOption('🌍', 'African Traditional Christian'),
+      OnboardingOption('🌐', 'Non-denominational'),
+      OnboardingOption('🤷', 'Not sure / Prefer not to say'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'prayerLanguageStyle',
+    section: 'Faith Personalization',
+    title: 'When you read a prayer, what tone feels most natural?',
+    options: [
+      OnboardingOption('🤝', 'Conversational — like talking to a friend'),
+      OnboardingOption('📜', 'Traditional — formal and reverent'),
+      OnboardingOption('🔥', 'Bold & declarative — strong faith confessions'),
+      OnboardingOption('🌊', 'Gentle & reflective — quiet and meditative'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'scripturePreference',
+    section: 'Faith Personalization',
+    title: 'Which Bible translation do you prefer?',
+    options: [
+      OnboardingOption('📖', 'NIV — easy to understand'),
+      OnboardingOption('📖', 'KJV — classic and traditional'),
+      OnboardingOption('📖', 'NLT — simple, everyday language'),
+      OnboardingOption('📖', 'ESV — precise and modern'),
+      OnboardingOption('📖', 'No preference — surprise me'),
+    ],
+  ),
+  OnboardingStep(
+    id: 'testimonialIntent',
+    section: 'Faith Personalization',
+    title: 'Would you like to track answered prayers?',
+    options: [
+      OnboardingOption('✅', 'Yes — I want to mark prayers as answered'),
+      OnboardingOption('📓', 'Yes — and write a brief testimony when they are'),
+      OnboardingOption('🔄', 'Maybe later'),
+      OnboardingOption('❌', 'No, not for me'),
+    ],
+  ),
+
+  // ─── Section 7 — Final Steps ────────────────────────────────────────────
+  OnboardingStep(
+    id: 'profile',
+    section: 'Final Steps',
+    title: 'How should we address you in your prayers?',
+    type: OnboardingStepType.profileSetup,
+  ),
+  OnboardingStep(
+    id: 'premiumChoice',
+    section: 'Final Steps',
+    title: 'Unlock everything ReviveMe has to offer',
+    subtitle: 'Unlimited AI chat · Mental Wellness content · No ads',
+    type: OnboardingStepType.premium,
+  ),
+  OnboardingStep(
+    id: 'summary',
+    section: 'Final Steps',
+    title: "You're ready! 🎉",
+    type: OnboardingStepType.summary,
   ),
 ];
 

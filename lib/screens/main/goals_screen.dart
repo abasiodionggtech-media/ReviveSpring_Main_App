@@ -7,6 +7,10 @@ import '../../core/app_controller.dart';
 import '../../models/goal_item.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/section_header.dart';
+import 'challenges_screen.dart';
+import 'fasting_tracker_screen.dart';
+import 'memory_cards_screen.dart';
+import 'reading_plans_screen.dart';
 
 class GoalsScreen extends StatelessWidget {
   const GoalsScreen({super.key, required this.controller});
@@ -40,7 +44,89 @@ class GoalsScreen extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 8),
+        const SectionHeader(title: 'Structured Growth', subtitle: 'Build a deeper habit over days and weeks.', icon: Icons.trending_up),
+        const SizedBox(height: 18),
+        _GrowthTile(
+          title: 'Prayer Challenges',
+          subtitle: 'Join a multi-day prayer challenge and check in daily.',
+          icon: Icons.emoji_events_outlined,
+          color: AppColors.coral,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ChallengesScreen(controller: controller))),
+        ),
+        const SizedBox(height: 12),
+        _GrowthTile(
+          title: 'Fasting Tracker',
+          subtitle: 'Start a fast, track your progress, and finish strong.',
+          icon: Icons.no_food_outlined,
+          color: AppColors.leaf,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FastingTrackerScreen(controller: controller))),
+        ),
+        const SizedBox(height: 12),
+        _GrowthTile(
+          title: 'Bible Reading Plan',
+          subtitle: 'Follow a guided plan through Scripture, one day at a time.',
+          icon: Icons.menu_book_outlined,
+          color: AppColors.sky,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ReadingPlansScreen(controller: controller))),
+        ),
+        const SizedBox(height: 12),
+        _GrowthTile(
+          title: 'Scripture Memory Cards',
+          subtitle: 'Flashcard your way to memorizing verses, then take the 7-day quiz.',
+          icon: Icons.style_outlined,
+          color: AppColors.deepEmerald,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MemoryCardsScreen(controller: controller))),
+        ),
       ],
+    );
+  }
+}
+
+class _GrowthTile extends StatelessWidget {
+  const _GrowthTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: onTap,
+      child: GlassPanel(
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(color: color.withValues(alpha: .14), borderRadius: BorderRadius.circular(14)),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: const TextStyle(color: AppColors.muted, height: 1.3, fontSize: 12)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 14),
+          ],
+        ),
+      ),
     );
   }
 }

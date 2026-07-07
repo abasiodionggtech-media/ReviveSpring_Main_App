@@ -4,6 +4,7 @@ class AppUser {
     required this.email,
     required this.fullName,
     this.language = 'en',
+    this.bibleVersion = 'NIV',
     this.role = 'user',
     this.plan = 'free',
     this.verified = true,
@@ -21,6 +22,7 @@ class AppUser {
   final String email;
   final String fullName;
   final String language;
+  final String bibleVersion;
   final String role;
   final String plan;
   final bool verified;
@@ -35,6 +37,8 @@ class AppUser {
 
   bool get isAdmin => role == 'admin';
   bool get isPremium => isAdmin || plan == 'premium';
+  bool get isStandard => plan == 'standard';
+  bool get isPaidPlan => isPremium || isStandard;
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
@@ -42,6 +46,7 @@ class AppUser {
       email: json['email']?.toString() ?? '',
       fullName: (json['fullName'] ?? json['full_name'] ?? 'Friend').toString(),
       language: (json['language'] ?? 'en').toString(),
+      bibleVersion: (json['bibleVersion'] ?? 'NIV').toString(),
       role: json['role']?.toString() ?? 'user',
       plan: (json['subscriptionStatus'] ?? json['plan'] ?? 'free').toString(),
       verified: (json['verified'] ?? json['isEmailVerified']) != false,
@@ -61,6 +66,7 @@ class AppUser {
         'email': email,
         'fullName': fullName,
         'language': language,
+        'bibleVersion': bibleVersion,
         'role': role,
         'plan': plan,
         'verified': verified,

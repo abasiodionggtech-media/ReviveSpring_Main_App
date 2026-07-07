@@ -11,6 +11,11 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/premium_upgrade_sheet.dart';
 import '../../widgets/section_header.dart';
+import 'ai_companion_screen.dart';
+import 'ai_prayer_writer_screen.dart';
+import 'dream_journal_screen.dart';
+import 'scripture_search_screen.dart';
+import 'sermon_summarizer_screen.dart';
 
 class AiScreen extends StatefulWidget {
   const AiScreen({super.key, required this.controller});
@@ -211,6 +216,97 @@ class _AiScreenState extends State<AiScreen> {
             'Un accompagnement connecte pour la priere et la reflexion.',
           ),
           icon: Icons.auto_awesome,
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ScriptureSearchScreen(controller: widget.controller),
+                  ),
+                ),
+                icon: const Icon(Icons.search),
+                label: Text(
+                  t('Topical Scripture Search', 'Recherche de versets'),
+                  textAlign: TextAlign.center,
+                ),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  if (!widget.controller.isPremiumUser) {
+                    PremiumUpgradeSheet.show(context, widget.controller);
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AiPrayerWriterScreen(controller: widget.controller),
+                    ),
+                  );
+                },
+                icon: Icon(widget.controller.isPremiumUser ? Icons.edit_note : Icons.lock_outline),
+                label: Text(
+                  t('AI Prayer Writer', 'Redacteur de prieres IA'),
+                  textAlign: TextAlign.center,
+                ),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _PremiumFeatureButton(
+              label: t('Spiritual Companion', 'Compagnon spirituel'),
+              icon: Icons.favorite_border,
+              isPremium: widget.controller.isPremiumUser,
+              onPressed: () {
+                if (!widget.controller.isPremiumUser) {
+                  PremiumUpgradeSheet.show(context, widget.controller);
+                  return;
+                }
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => AiCompanionScreen(controller: widget.controller)),
+                );
+              },
+            ),
+            _PremiumFeatureButton(
+              label: t('Sermon Summarizer', 'Resume de sermon'),
+              icon: Icons.summarize_outlined,
+              isPremium: widget.controller.isPremiumUser,
+              onPressed: () {
+                if (!widget.controller.isPremiumUser) {
+                  PremiumUpgradeSheet.show(context, widget.controller);
+                  return;
+                }
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => SermonSummarizerScreen(controller: widget.controller)),
+                );
+              },
+            ),
+            _PremiumFeatureButton(
+              label: t('Dream & Vision Journal', 'Journal de reves'),
+              icon: Icons.nights_stay_outlined,
+              isPremium: widget.controller.isPremiumUser,
+              onPressed: () {
+                if (!widget.controller.isPremiumUser) {
+                  PremiumUpgradeSheet.show(context, widget.controller);
+                  return;
+                }
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => DreamJournalScreen(controller: widget.controller)),
+                );
+              },
+            ),
+          ],
         ),
         const SizedBox(height: 18),
         if (!widget.controller.isPremiumUser)
@@ -445,6 +541,34 @@ class _AiRewardDialogState extends State<_AiRewardDialog> {
           child: Text(widget.actionLabel),
         ),
       ],
+    );
+  }
+}
+
+class _PremiumFeatureButton extends StatelessWidget {
+  const _PremiumFeatureButton({
+    required this.label,
+    required this.icon,
+    required this.isPremium,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isPremium;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(isPremium ? icon : Icons.lock_outline, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        foregroundColor: AppColors.deepEmerald,
+        side: BorderSide(color: AppColors.deepEmerald.withValues(alpha: .3)),
+      ),
     );
   }
 }

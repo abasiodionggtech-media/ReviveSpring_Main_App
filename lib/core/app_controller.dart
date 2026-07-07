@@ -36,6 +36,12 @@ class AppController extends ChangeNotifier {
   final goals = <GoalItem>[];
   final journal = <JournalEntry>[];
   Map<String, dynamic> analytics = {};
+  Map<String, dynamic> moodCheckInToday = {};
+  Map<String, dynamic> dailyManna = {};
+  Map<String, dynamic> todaysDeclaration = {};
+  List<Map<String, dynamic>> prayers = [];
+  Map<String, dynamic> growthScore = {};
+  List<Map<String, dynamic>> seasonalEvents = [];
   Map<String, dynamic> dailyVerse = {};
   List<Map<String, dynamic>> prayerLibrary = [];
   List<Map<String, dynamic>> alerts = [];
@@ -74,25 +80,42 @@ class AppController extends ChangeNotifier {
     return isPremiumUser ? 5 : 0;
   }
 
-  String get subscriptionProductId {
-    final pricing = monetization['pricing'];
-    if (pricing is Map && pricing['googlePlayProductId'] != null) {
-      return pricing['googlePlayProductId'].toString();
+  List<Map<String, dynamic>> get subscriptionPlans {
+    final plans = monetization['plans'];
+    if (plans is List) {
+      return plans.map((item) => Map<String, dynamic>.from(item as Map)).toList();
     }
-    return 'revivespring_premium_monthly';
+    return const [];
   }
 
+  Map<String, dynamic>? planFor(String tier) {
+    for (final plan in subscriptionPlans) {
+      if (plan['tier'] == tier) return plan;
+    }
+    return null;
+  }
+
+  String productIdFor(String tier) {
+    final plan = planFor(tier);
+    if (plan != null && plan['googlePlayProductId'] != null) {
+      return plan['googlePlayProductId'].toString();
+    }
+    return tier == 'standard'
+        ? 'revivespring_standard_3mo'
+        : 'revivespring_premium_3mo';
+  }
+
+  /// A short "From $X / month" label for the dismissible home banner —
+  /// pulled from the cheaper (standard) plan.
   String get subscriptionPriceLabel {
-    final pricing = monetization['pricing'];
-    if (pricing is Map) {
-      if (language == 'fr' && pricing['labelFr'] != null) {
-        return pricing['labelFr'].toString();
-      }
-      if (pricing['labelEn'] != null) {
-        return pricing['labelEn'].toString();
+    final standard = planFor('standard');
+    if (standard != null) {
+      final label = language == 'fr' ? standard['labelFr'] : standard['labelEn'];
+      if (label != null) {
+        return language == 'fr' ? 'A partir de $label' : 'From $label';
       }
     }
-    return language == 'fr' ? '50 nairas / mois' : '50 naira / month';
+    return language == 'fr' ? 'A partir de 9,25 \$ / mois' : 'From \$9.25 / month';
   }
 
   String get premiumBannerTitle {
@@ -248,6 +271,22 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<String?> updateBibleVersion(String value) async {
+    const allowed = {'NIV', 'KJV', 'NLT', 'ESV'};
+    final normalized = allowed.contains(value) ? value : 'NIV';
+    try {
+      user = await api.updateProfile({'bibleVersion': normalized});
+      try {
+        dailyVerse = await api.getDailyVerse();
+      } catch (_) {}
+      await _saveSession();
+      notifyListeners();
+      return null;
+    } on ApiException catch (error) {
+      return error.message;
+    }
+  }
+
   Future<String?> updateProfileSettings({
     required bool dailyEmailEnabled,
     required int reminderHour,
@@ -269,8 +308,19 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> updateFullName(String name) async {
+    if (name.trim().isEmpty) return;
+    try {
+      user = await api.updateProfile({'full_name': name.trim()});
+      await _saveSession();
+      notifyListeners();
+    } catch (_) {
+      // Non-fatal — onboarding should still be able to continue.
+    }
+  }
+
   void nextOnboarding() {
-    if (onboardingIndex >= onboardingSlides.length - 1) {
+    if (onboardingIndex >= onboardingSteps.length - 1) {
       _setStage(signedIn ? AppStage.app : AppStage.auth);
     } else {
       onboardingIndex += 1;
@@ -462,6 +512,24 @@ class AppController extends ChangeNotifier {
       try {
         monetization = await api.getMonetizationStatus();
       } catch (_) {}
+      try {
+        moodCheckInToday = await api.getMoodCheckInToday();
+      } catch (_) {}
+      try {
+        dailyManna = await api.getDailyMannaStatus();
+      } catch (_) {}
+      try {
+        todaysDeclaration = await api.getTodaysDeclaration();
+      } catch (_) {}
+      try {
+        prayers = await api.getPrayers();
+      } catch (_) {}
+      try {
+        growthScore = await api.getGrowthScore();
+      } catch (_) {}
+      try {
+        seasonalEvents = await api.getSeasonalEvents();
+      } catch (_) {}
       await _schedulePrayerReminder();
       notifyListeners();
     } catch (_) {}
@@ -472,6 +540,54 @@ class AppController extends ChangeNotifier {
       monetization = await api.getMonetizationStatus();
       notifyListeners();
     } catch (_) {}
+  }
+
+  bool get hasCheckedInToday => moodCheckInToday['checkedIn'] == true;
+
+  Future<void> submitMoodCheckIn(String mood, {String? note}) async {
+    await api.logMoodCheckIn(mood, note: note);
+    moodCheckInToday = {
+      'checkedIn': true,
+      'log': {'mood': mood, 'note': note},
+    };
+    notifyListeners();
+  }
+
+  bool get isDailyMannaAvailable => dailyManna['available'] != false;
+
+  Future<Map<String, dynamic>> claimDailyManna() async {
+    final result = await api.claimDailyManna();
+    dailyManna = {...dailyManna, ...result, 'available': false};
+    notifyListeners();
+    return result;
+  }
+
+  // ── Verse of the Moment ──────────────────────────────────────
+  Future<Map<String, dynamic>> fetchRandomVerse() => api.getRandomVerse();
+
+  // ── Prophetic Declarations ───────────────────────────────────
+  bool get hasConfirmedDeclarationToday => todaysDeclaration['confirmedToday'] == true;
+
+  Future<void> confirmDeclaration() async {
+    final result = await api.confirmDeclaration();
+    todaysDeclaration = {...todaysDeclaration, ...result};
+    notifyListeners();
+  }
+
+  // ── Answered Prayer Wall ──────────────────────────────────────
+  List<Map<String, dynamic>> get answeredPrayers =>
+      prayers.where((p) => p['is_answered'] == true).toList();
+
+  List<Map<String, dynamic>> get unansweredPrayers =>
+      prayers.where((p) => p['is_answered'] != true).toList();
+
+  Future<void> markPrayerAnswered(String prayerId, {String? testimony}) async {
+    await api.markPrayerAnswered(prayerId, isAnswered: true, testimony: testimony);
+    final index = prayers.indexWhere((p) => p['id'] == prayerId);
+    if (index != -1) {
+      prayers[index] = {...prayers[index], 'is_answered': true, 'testimony': testimony};
+    }
+    notifyListeners();
   }
 
   Future<Map<String, dynamic>> unlockAiForFreeUser() async {
@@ -514,10 +630,10 @@ class AppController extends ChangeNotifier {
     };
   }
 
-  Future<String?> activateGooglePlayBilling() async {
+  Future<String?> activateGooglePlayBilling({required String tier}) async {
     try {
       final result = await PlayBillingService.instance.purchaseProduct(
-        subscriptionProductId,
+        productIdFor(tier),
       );
       await PlayBillingService.instance.completeIfNeeded(result.purchase);
       user = await api.syncMobileSubscription(
@@ -536,10 +652,10 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<String?> restoreGooglePlayBilling() async {
+  Future<String?> restoreGooglePlayBilling({required String tier}) async {
     try {
       final result = await PlayBillingService.instance.restoreProductPurchase(
-        subscriptionProductId,
+        productIdFor(tier),
       );
       await PlayBillingService.instance.completeIfNeeded(result.purchase);
       user = await api.syncMobileSubscription(

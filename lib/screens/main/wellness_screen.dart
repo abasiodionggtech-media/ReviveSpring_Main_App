@@ -4,7 +4,14 @@ import '../../core/app_colors.dart';
 import '../../core/app_controller.dart';
 import '../../widgets/content_tiles.dart';
 import '../../widgets/glass_panel.dart';
+import '../../widgets/premium_upgrade_sheet.dart';
 import '../../widgets/section_header.dart';
+import 'breathing_exercise_screen.dart';
+import 'grief_crisis_support_screen.dart';
+import 'prayer_room_screen.dart';
+import 'sleep_prayer_screen.dart';
+import 'weekly_review_screen.dart';
+import 'worship_mode_screen.dart';
 
 class WellnessScreen extends StatefulWidget {
   const WellnessScreen({
@@ -199,6 +206,90 @@ class _WellnessScreenState extends State<WellnessScreen> {
           icon: Icons.auto_awesome,
           color: AppColors.leaf,
           onTap: () => _showAffirmations(context),
+        ),
+        const SizedBox(height: 12),
+        PrayerTile(
+          title: 'Breathing & Prayer Exercise',
+          body:
+              'A guided 4-7-8 breathing rhythm paired with short prayer prompts — great for anxious moments.',
+          icon: Icons.self_improvement,
+          color: AppColors.sky,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const BreathingExerciseScreen(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        PrayerTile(
+          title: 'Sleep Prayer',
+          body:
+              'A calming night-mode screen with a slow prayer to help you rest, worry-free.',
+          icon: Icons.nightlight_round,
+          color: AppColors.lavender,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const SleepPrayerScreen(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        PrayerTile(
+          title: 'Prayer Room',
+          body:
+              'An immersive, ambient timer for sitting quietly with God — choose 5 to 20 minutes.',
+          icon: Icons.self_improvement,
+          color: AppColors.deepEmerald,
+          trailing: widget.controller.isPremiumUser ? null : const _PremiumBadge(),
+          onTap: () {
+            if (!widget.controller.isPremiumUser) {
+              PremiumUpgradeSheet.show(context, widget.controller);
+              return;
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const PrayerRoomScreen()),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        PrayerTile(
+          title: 'Worship Mode',
+          body:
+              'A curated worship playlist — tap a track to open it in YouTube or Spotify.',
+          icon: Icons.music_note_outlined,
+          color: AppColors.coral,
+          trailing: widget.controller.isPremiumUser ? null : const _PremiumBadge(),
+          onTap: () {
+            if (!widget.controller.isPremiumUser) {
+              PremiumUpgradeSheet.show(context, widget.controller);
+              return;
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => WorshipModeScreen(controller: widget.controller)),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        PrayerTile(
+          title: 'Weekly Spiritual Review',
+          body:
+              'A short AI reflection on your week, refreshed every Sunday, plus space for your own thoughts.',
+          icon: Icons.calendar_today_outlined,
+          color: AppColors.sky,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => WeeklyReviewScreen(controller: widget.controller)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        PrayerTile(
+          title: 'Grief & Crisis Support',
+          body:
+              'Gentle content for heavy seasons, plus crisis resources — always free, always here.',
+          icon: Icons.volunteer_activism_outlined,
+          color: AppColors.leaf,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => GriefCrisisSupportScreen(controller: widget.controller)),
+          ),
         ),
       ],
     );
@@ -608,6 +699,25 @@ class _WellnessDetailCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PremiumBadge extends StatelessWidget {
+  const _PremiumBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.coral.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Text(
+        'Premium',
+        style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.w800, fontSize: 10),
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../../widgets/app_buttons.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/premium_upgrade_sheet.dart';
 import '../../widgets/section_header.dart';
+import 'milestones_screen.dart';
 
 const _privacyPolicyUrl = 'https://www.iubenda.com/privacy-policy/60287717';
 const _cookiePolicyUrl =
@@ -27,6 +28,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _savingLanguage = false;
+  bool _savingBibleVersion = false;
   bool _savingReminder = false;
   bool _dailyEmails = true;
   int _reminderHour = 9;
@@ -238,6 +240,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 14),
         GlassPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                t('Bible Version', 'Version de la Bible'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                t(
+                  'Choose the translation used for your daily verse and Verse of the Moment.',
+                  'Choisissez la traduction utilisee pour votre verset du jour.',
+                ),
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: const {'NIV', 'KJV', 'NLT', 'ESV'}.contains(widget.controller.user?.bibleVersion)
+                    ? widget.controller.user!.bibleVersion
+                    : 'NIV',
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: AppColors.iconCream.withValues(alpha: .55),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'NIV', child: Text('NIV — New International Version')),
+                  DropdownMenuItem(value: 'KJV', child: Text('KJV — King James Version')),
+                  DropdownMenuItem(value: 'NLT', child: Text('NLT — New Living Translation')),
+                  DropdownMenuItem(value: 'ESV', child: Text('ESV — English Standard Version')),
+                ],
+                onChanged: _savingBibleVersion
+                    ? null
+                    : (value) async {
+                        if (value == null) return;
+                        setState(() => _savingBibleVersion = true);
+                        final error = await widget.controller.updateBibleVersion(value);
+                        if (!mounted) return;
+                        setState(() => _savingBibleVersion = false);
+                        if (error != null) {
+                          messenger.showSnackBar(SnackBar(content: Text(error)));
+                        }
+                      },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        GlassPanel(
           child: ListTile(
             leading: const Icon(
               Icons.verified_user_outlined,
@@ -245,6 +302,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             title: Text(t('Sign-In Method', 'Methode de connexion')),
             subtitle: Text((user?.authProvider ?? 'email').toUpperCase()),
+          ),
+        ),
+        const SizedBox(height: 14),
+        GlassPanel(
+          child: ListTile(
+            leading: const Icon(
+              Icons.emoji_events_outlined,
+              color: AppColors.deepEmerald,
+            ),
+            title: Text(t('Faith Milestones', 'Etapes de foi')),
+            subtitle: Text(
+              t('View your earned badges', 'Voir vos badges obtenus'),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => MilestonesScreen(controller: widget.controller),
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 14),
