@@ -51,6 +51,7 @@ function safeUser(user) {
   const { passwordHash, otpCode, otpExpiresAt, ...safe } = user;
   return {
     ...safe,
+    hasPassword: !!passwordHash,
     subscriptionStatus: effectivePlan(user),
     plan: effectivePlan(user),
     hasCompletedOnboarding: !!(safe.onboardingData && typeof safe.onboardingData === 'object' && safe.onboardingData.completedAt),
@@ -227,6 +228,7 @@ router.post(
       }
 
       if (!user) {
+        const otp = generateOtp();
         user = await prisma.user.create({
           data: {
             email,
@@ -235,13 +237,46 @@ router.post(
             authProvider: 'google',
             googleSub,
             profileImageUrl,
-            isEmailVerified: true,
+            isEmailVerified: false,
+            otpCode: otp,
+            otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
             language: req.body.language === 'fr' ? 'fr' : 'en',
           },
         });
         await prisma.analytics.create({ data: { userId: user.id } });
+
+        // New Google accounts still confirm their email once, the same way
+        // email/password sign-ups do — Google's own token already proves
+        // this address is real, but this keeps the verification step
+        // consistent everywhere in the app rather than only for one
+        // sign-in method.
+        if (!await deliverOtp(res, email, otp, user.language)) return;
+        return res.status(201).json({
+          message: 'Account created. Please verify your email.',
+          requiresVerification: true,
+          email,
+          verifyUrl: verificationLink(email),
+        });
       } else if (user.googleSub && googleSub && user.googleSub !== googleSub) {
         return res.status(409).json({ message: 'This Google account does not match the existing profile.' });
+      } else if (!user.isEmailVerified) {
+        // Existing account that was never verified (e.g. created before
+        // this check existed) — same resend-and-verify flow as login.
+        const otp = generateOtp();
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            otpCode: otp,
+            otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          },
+        });
+        if (!await deliverOtp(res, email, otp, user.language)) return;
+        return res.status(403).json({
+          message: 'Email not verified. A verification code has been sent.',
+          requiresVerification: true,
+          email,
+          verifyUrl: verificationLink(email),
+        });
       } else {
         user = await prisma.user.update({
           where: { id: user.id },
@@ -361,8 +396,8 @@ router.post(
       if (user.isDisabled) {
         return res.status(403).json({ message: 'This account has been disabled.' });
       }
-      if (user.authProvider === 'google') {
-        return res.status(409).json({ message: 'This account uses Google Sign-In. Continue with Google instead.' });
+      if (user.authProvider === 'google' && !user.passwordHash) {
+        return res.status(409).json({ message: 'This account uses Google Sign-In. Continue with Google, or add a password from your profile settings first.' });
       }
 
       const match = await bcrypt.compare(password, user.passwordHash);
@@ -497,6 +532,8 @@ router.patch(
     body('full_name').optional().trim().notEmpty(),
     body('language').optional().isIn(['en', 'fr']),
     body('bibleVersion').optional().isIn(['NIV', 'KJV', 'NLT', 'ESV']),
+    body('fontFamily').optional().isIn(['Inter', 'Poppins', 'Nunito', 'Merriweather', 'Lora', 'Playfair Display', 'Quicksand', 'Source Sans 3', 'Crimson Text', 'Comfortaa']),
+    body('fontScale').optional().isFloat({ min: 0.8, max: 1.4 }),
     body('salvationDate').optional().isString(),
     body('testimony').optional().isString(),
     body('dailyEmailEnabled').optional().isBoolean(),
@@ -513,6 +550,8 @@ router.patch(
       if (req.body.full_name)                   data.fullName      = req.body.full_name;
       if (req.body.language)                     data.language      = req.body.language;
       if (req.body.bibleVersion)                  data.bibleVersion  = req.body.bibleVersion;
+      if (req.body.fontFamily)                    data.fontFamily    = req.body.fontFamily;
+      if (req.body.fontScale !== undefined)        data.fontScale     = Number(req.body.fontScale);
       if (req.body.salvationDate !== undefined)  data.salvationDate = req.body.salvationDate;
       if (req.body.testimony     !== undefined)  data.testimony     = req.body.testimony;
       if (req.body.dailyEmailEnabled !== undefined) data.dailyEmailEnabled = req.body.dailyEmailEnabled;
@@ -571,8 +610,8 @@ router.post(
     try {
       const { currentPassword, newPassword } = req.body;
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (user.authProvider === 'google') {
-        return res.status(400).json({ message: 'This account uses Google Sign-In and does not have a password to change.' });
+      if (!user.passwordHash) {
+        return res.status(400).json({ message: 'This account does not have a password yet. Use "Create a Password" in your profile settings first.' });
       }
       const match = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!match) return res.status(400).json({ message: 'Current password is incorrect.' });
@@ -580,6 +619,28 @@ router.post(
       const passwordHash = await bcrypt.hash(newPassword, 12);
       await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash } });
       return res.json({ message: 'Password updated successfully.' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /api/auth/set-password — link a password to a Google-signed-in
+// account, so it can also be used to sign in with email + password ──────────
+router.post(
+  '/set-password',
+  authenticate,
+  [body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters.')],
+  async (req, res, next) => {
+    if (handleValidation(req, res)) return;
+    try {
+      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (user.passwordHash) {
+        return res.status(400).json({ message: 'This account already has a password. Use "Change Password" instead.' });
+      }
+      const passwordHash = await bcrypt.hash(req.body.newPassword, 12);
+      await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash } });
+      return res.json({ message: 'Password created. You can now sign in with either Google or your email and password.' });
     } catch (err) {
       next(err);
     }

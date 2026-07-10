@@ -7,10 +7,11 @@ import '../models/journal_entry.dart';
 import '../models/prayer_response.dart';
 
 class ApiException implements Exception {
-  ApiException(this.message, {this.statusCode});
+  ApiException(this.message, {this.statusCode, this.data});
 
   final String message;
   final int? statusCode;
+  final Map<String, dynamic>? data;
 
   @override
   String toString() => message;
@@ -22,6 +23,13 @@ class ApiService {
   final String baseUrl;
   String? token;
   AppUser? cachedUser;
+
+  /// The server root without the `/api` suffix — static media like the
+  /// onboarding intro video is served from here (e.g. `$mediaBaseUrl/media/intro-video.mp4`),
+  /// not under `/api`.
+  String get mediaBaseUrl => baseUrl.endsWith('/api')
+      ? baseUrl.substring(0, baseUrl.length - '/api'.length)
+      : baseUrl;
 
   bool get isAuthed => token != null;
 
@@ -58,7 +66,11 @@ class ApiService {
         final message = data is Map
             ? (data['message'] ?? data['error'] ?? 'Request failed.').toString()
             : 'Request failed.';
-        throw ApiException(message, statusCode: res.statusCode);
+        throw ApiException(
+          message,
+          statusCode: res.statusCode,
+          data: data is Map ? Map<String, dynamic>.from(data) : null,
+        );
       }
       return data;
     } on SocketException {
@@ -84,7 +96,7 @@ class ApiService {
     return cachedUser!;
   }
 
-  Future<AppUser> loginWithGoogle(
+  Future<Map<String, dynamic>> loginWithGoogle(
     String idToken, {
     String language = 'en',
   }) async {
@@ -94,11 +106,18 @@ class ApiService {
       body: {'id_token': idToken, 'language': language, 'client': 'mobile'},
       authed: false,
     );
-    token = data['token']?.toString();
+    final result = Map<String, dynamic>.from(data as Map);
+    if (result['requiresVerification'] == true) {
+      // A brand-new (or not-yet-verified) Google account — same one-time
+      // email confirmation step as email/password sign-up. No token/user
+      // yet; the caller sends them to the verify screen instead.
+      return result;
+    }
+    token = result['token']?.toString();
     cachedUser = AppUser.fromJson(
-      Map<String, dynamic>.from(data['user'] as Map),
+      Map<String, dynamic>.from(result['user'] as Map),
     );
-    return cachedUser!;
+    return result;
   }
 
   Future<void> register(String email, String password, String fullName) {
@@ -294,6 +313,16 @@ class ApiService {
     return data is Map ? Map<String, dynamic>.from(data) : {};
   }
 
+  /// Looping background videos for the Verse of the Moment screen. Returns
+  /// full URLs (media base + path) ready to hand straight to VideoPlayer.
+  Future<List<String>> getVerseBackgroundVideoUrls() async {
+    final data = await _request('GET', '/daily-verse/backgrounds');
+    final list = data is List ? data : const [];
+    return list
+        .map((item) => '$mediaBaseUrl${(item as Map)['url']}')
+        .toList();
+  }
+
   // ── Prophetic Declarations ───────────────────────────────────
   Future<Map<String, dynamic>> getTodaysDeclaration() async {
     final data = await _request('GET', '/declarations/today');
@@ -445,6 +474,29 @@ class ApiService {
 
   Future<Map<String, dynamic>> quizMemoryCard(String id, {required bool passed}) async {
     final data = await _request('POST', '/memory-cards/$id/quiz', body: {'passed': passed});
+    return data is Map ? Map<String, dynamic>.from(data) : {};
+  }
+
+  Future<List<Map<String, dynamic>>> getDueMemoryCards() async {
+    final data = await _request('GET', '/memory-cards/due');
+    final list = data is List ? data : const [];
+    return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> recallMemoryCard(String id, String text) async {
+    final data = await _request('POST', '/memory-cards/$id/recall', body: {'text': text});
+    return data is Map ? Map<String, dynamic>.from(data) : {};
+  }
+
+  // ── Prayer Challenge Suggestions ─────────────────────────────
+  Future<List<Map<String, dynamic>>> getChallengeSuggestions() async {
+    final data = await _request('GET', '/challenges/suggestions');
+    final list = data is List ? data : const [];
+    return list.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> submitChallengeSuggestion(String text) async {
+    final data = await _request('POST', '/challenges/suggestions', body: {'text': text});
     return data is Map ? Map<String, dynamic>.from(data) : {};
   }
 
@@ -736,6 +788,25 @@ class ApiService {
     final data = await _request('PATCH', '/auth/me', body: body);
     cachedUser = AppUser.fromJson(Map<String, dynamic>.from(data as Map));
     return cachedUser!;
+  }
+
+  // ── Password & Security ───────────────────────────────────────
+  Future<void> changePassword({required String currentPassword, required String newPassword}) {
+    return _request(
+      'POST',
+      '/auth/change-password',
+      body: {'currentPassword': currentPassword, 'newPassword': newPassword},
+    ).then((_) {});
+  }
+
+  /// Links a password to an account that signed up with Google, so it can
+  /// also be used to sign in with email + password afterward.
+  Future<void> setPassword(String newPassword) {
+    return _request(
+      'POST',
+      '/auth/set-password',
+      body: {'newPassword': newPassword},
+    ).then((_) {});
   }
 
   Future<void> deleteAccount({

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/app_colors.dart';
+import '../core/app_tokens.dart';
 import '../data/app_data.dart';
 import 'glass_panel.dart';
 import 'section_header.dart';
@@ -41,8 +43,13 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      onTap: onTap == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap!();
+            },
       child: GlassPanel(
         child: Column(
           children: [
@@ -109,8 +116,13 @@ class PrayerTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        onTap: onTap == null
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                onTap!();
+              },
         child: GlassPanel(
           child: Row(
             children: [

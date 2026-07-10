@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/app_colors.dart';
+import '../../widgets/gentle_float.dart';
 
 enum _BreathPhase { inhale, hold, exhale }
 
@@ -35,11 +36,16 @@ class _BreathingExerciseScreenState extends State<BreathingExerciseScreen>
   Timer? _phaseTimer;
   int _cycles = 0;
   bool _running = true;
+  bool _started = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this);
+  }
+
+  void _begin() {
+    setState(() => _started = true);
     _startPhase(_BreathPhase.inhale);
   }
 
@@ -109,6 +115,66 @@ class _BreathingExerciseScreenState extends State<BreathingExerciseScreen>
   @override
   Widget build(BuildContext context) {
     final prayer = _prayers[_cycles % _prayers.length];
+
+    if (!_started) {
+      return Scaffold(
+        backgroundColor: AppColors.deepEmerald,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, color: Colors.white),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.self_improvement, color: Colors.white70, size: 42),
+                      const SizedBox(height: 20),
+                      const Text(
+                        '4-7-8 Breathing',
+                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        "We're here to help you find calm and peace within your heart and soul. This simple rhythm — breathe in for 4 seconds, hold for 7, breathe out for 8 — gives your body a moment to settle, while short prayers guide your thoughts back to God.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white.withValues(alpha: .82), height: 1.5, fontSize: 15),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        "Find a quiet spot, get comfortable, and when you're ready, we'll begin together.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white.withValues(alpha: .82), height: 1.5, fontSize: 15),
+                      ),
+                      const SizedBox(height: 30),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _begin,
+                          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.deepEmerald),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Text('Begin', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.deepEmerald,
       body: SafeArea(
@@ -145,12 +211,21 @@ class _BreathingExerciseScreenState extends State<BreathingExerciseScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
+                        stops: const [0.0, 0.55, 0.85, 1.0],
                         colors: [
-                          AppColors.sproutGreen.withValues(alpha: .55),
+                          AppColors.sproutGreen.withValues(alpha: .6),
+                          AppColors.sproutGreen.withValues(alpha: .32),
                           AppColors.sproutGreen.withValues(alpha: .08),
+                          AppColors.sproutGreen.withValues(alpha: 0),
                         ],
                       ),
-                      border: Border.all(color: Colors.white.withValues(alpha: .35), width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.sproutGreen.withValues(alpha: .25),
+                          blurRadius: 60,
+                          spreadRadius: 10,
+                        ),
+                      ],
                     ),
                     alignment: Alignment.center,
                     child: Text(
@@ -166,15 +241,17 @@ class _BreathingExerciseScreenState extends State<BreathingExerciseScreen>
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
-                child: Text(
-                  '"$prayer"',
+                child: GentleFloat(
                   key: ValueKey(prayer),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: .85),
-                    fontStyle: FontStyle.italic,
-                    fontSize: 16,
-                    height: 1.4,
+                  child: Text(
+                    '"$prayer"',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: .85),
+                      fontStyle: FontStyle.italic,
+                      fontSize: 16,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
+import '../../widgets/gentle_float.dart';
 
 class SleepPrayerScreen extends StatefulWidget {
   const SleepPrayerScreen({super.key});
@@ -83,14 +84,16 @@ class _SleepPrayerScreenState extends State<SleepPrayerScreen> {
                       children: [
                         Icon(Icons.nightlight_round, color: Colors.white.withValues(alpha: .35), size: 34),
                         const SizedBox(height: 28),
-                        Text(
-                          prayer,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: .82),
-                            fontSize: 18,
-                            height: 1.7,
-                            fontWeight: FontWeight.w500,
+                        GentleFloat(
+                          child: Text(
+                            prayer,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .82),
+                              fontSize: 18,
+                              height: 1.7,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 26),

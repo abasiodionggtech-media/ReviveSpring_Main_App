@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_controller.dart';
 import '../../widgets/app_buttons.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_panel.dart';
 
 class ChallengesScreen extends StatefulWidget {
@@ -16,7 +17,10 @@ class ChallengesScreen extends StatefulWidget {
 
 class _ChallengesScreenState extends State<ChallengesScreen> {
   List<Map<String, dynamic>> _challenges = [];
+  List<Map<String, dynamic>> _suggestions = [];
+  final _suggestionController = TextEditingController();
   bool _loading = true;
+  bool _submittingSuggestion = false;
   String? _busyId;
 
   @override
@@ -25,13 +29,53 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _suggestionController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     try {
-      final challenges = await widget.controller.api.getChallenges();
-      if (mounted) setState(() => _challenges = challenges);
+      final results = await Future.wait([
+        widget.controller.api.getChallenges(),
+        widget.controller.api.getChallengeSuggestions(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _challenges = results[0];
+          _suggestions = results[1];
+        });
+      }
     } catch (_) {
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _submitSuggestion() async {
+    final text = _suggestionController.text.trim();
+    if (text.isEmpty || _submittingSuggestion) return;
+    setState(() => _submittingSuggestion = true);
+    try {
+      final suggestion = await widget.controller.api.submitChallengeSuggestion(text);
+      if (mounted) {
+        setState(() {
+          _suggestions.insert(0, suggestion);
+          _suggestionController.clear();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Thank you! Your idea has been sent to our team and saved to your account."), backgroundColor: AppColors.deepEmerald),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't submit your idea right now. Please try again.")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submittingSuggestion = false);
     }
   }
 
@@ -167,6 +211,61 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                     ),
                   );
                 }),
+                const SizedBox(height: 8),
+                Text('Suggest Your Own Challenge', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                const Text(
+                  "Have an idea for a prayer challenge? Share it — we'll review it, and it's saved to your account so you can track it.",
+                  style: TextStyle(color: AppColors.muted, height: 1.4, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                GlassPanel(
+                  child: Column(
+                    children: [
+                      AppTextField(
+                        label: 'e.g. "21 Days praying for our nation"',
+                        icon: Icons.lightbulb_outline,
+                        controller: _suggestionController,
+                        minLines: 2,
+                        maxLines: 4,
+                      ),
+                      const SizedBox(height: 10),
+                      AnimatedPrimaryButton(
+                        label: _submittingSuggestion ? 'Submitting...' : 'Submit Idea',
+                        icon: Icons.send,
+                        busy: _submittingSuggestion,
+                        onPressed: _submittingSuggestion ? null : _submitSuggestion,
+                      ),
+                    ],
+                  ),
+                ),
+                if (_suggestions.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  const Text('Your Submitted Ideas', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                  const SizedBox(height: 10),
+                  ..._suggestions.map((s) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: GlassPanel(
+                          child: Row(
+                            children: [
+                              Expanded(child: Text(s['text']?.toString() ?? '', style: const TextStyle(height: 1.4))),
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.sky.withValues(alpha: .16),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  (s['status']?.toString() ?? 'submitted').toUpperCase(),
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.deepEmerald),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+                ],
               ],
             ),
     );

@@ -5,6 +5,7 @@ import '../../core/app_controller.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_panel.dart';
+import '../../widgets/state_placeholders.dart';
 
 class TestimonyFeedScreen extends StatefulWidget {
   const TestimonyFeedScreen({super.key, required this.controller});
@@ -20,6 +21,7 @@ class _TestimonyFeedScreenState extends State<TestimonyFeedScreen> {
   final _contentController = TextEditingController();
   List<Map<String, dynamic>> _testimonies = [];
   bool _loading = true;
+  bool _hasError = false;
   bool _posting = false;
   bool _anonymous = false;
   bool _showForm = false;
@@ -39,10 +41,15 @@ class _TestimonyFeedScreenState extends State<TestimonyFeedScreen> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = _testimonies.isEmpty;
+      _hasError = false;
+    });
     try {
       final testimonies = await widget.controller.api.getTestimonies();
       if (mounted) setState(() => _testimonies = testimonies);
     } catch (_) {
+      if (mounted && _testimonies.isEmpty) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -104,8 +111,14 @@ class _TestimonyFeedScreenState extends State<TestimonyFeedScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.deepEmerald))
-          : ListView(
+          ? ListView(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 40),
+              children: const [SkeletonList()],
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              color: AppColors.deepEmerald,
+              child: ListView(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 40),
               children: [
                 if (_showForm) ...[
@@ -140,7 +153,16 @@ class _TestimonyFeedScreenState extends State<TestimonyFeedScreen> {
                   ),
                   const SizedBox(height: 18),
                 ],
-                ..._testimonies.map((item) {
+                if (_hasError)
+                  ErrorState(message: "Couldn't load the testimony feed right now.", onRetry: _load)
+                else if (_testimonies.isEmpty)
+                  const EmptyState(
+                    icon: Icons.auto_awesome,
+                    title: 'No testimonies yet',
+                    body: 'Be the first to celebrate what God has done.',
+                  )
+                else
+                  ..._testimonies.map((item) {
                   final busy = _busyId == item['id'];
                   final reacted = item['reacted_by_me'] == true;
                   return Padding(
@@ -174,6 +196,7 @@ class _TestimonyFeedScreenState extends State<TestimonyFeedScreen> {
                   );
                 }),
               ],
+            ),
             ),
     );
   }

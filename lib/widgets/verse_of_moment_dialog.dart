@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
+import 'cover_loop_video.dart';
 
 class VerseOfMomentDialog extends StatefulWidget {
-  const VerseOfMomentDialog({super.key, required this.fetchVerse});
+  const VerseOfMomentDialog({super.key, required this.fetchVerse, this.fetchBackgrounds});
 
   final Future<Map<String, dynamic>> Function() fetchVerse;
+  final Future<List<String>> Function()? fetchBackgrounds;
 
   @override
   State<VerseOfMomentDialog> createState() => _VerseOfMomentDialogState();
@@ -15,11 +17,17 @@ class _VerseOfMomentDialogState extends State<VerseOfMomentDialog> {
   Map<String, dynamic>? verse;
   bool loading = false;
   bool hasError = false;
+  String? errorDetail;
+  List<String> backgroundUrls = [];
+  int _verseChangeCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadNext();
+    widget.fetchBackgrounds?.call().then((urls) {
+      if (mounted) setState(() => backgroundUrls = urls);
+    }).catchError((_) {});
   }
 
   Future<void> _loadNext() async {
@@ -34,13 +42,18 @@ class _VerseOfMomentDialogState extends State<VerseOfMomentDialog> {
         setState(() {
           verse = result;
           hasError = false;
+          errorDetail = null;
+          _verseChangeCount++;
         });
       }
-    } catch (_) {
+    } catch (error) {
       // Only show the error state if we have nothing else to display —
       // otherwise keep the previous verse on screen.
       if (mounted && verse == null) {
-        setState(() => hasError = true);
+        setState(() {
+          hasError = true;
+          errorDetail = error.toString();
+        });
       }
     } finally {
       if (mounted) setState(() => loading = false);
@@ -59,19 +72,26 @@ class _VerseOfMomentDialogState extends State<VerseOfMomentDialog> {
         child: SizedBox(
           width: double.infinity,
           height: double.infinity,
-          child: SafeArea(
-            child: Stack(
-              children: [
-                Align(
-                  alignment: Alignment.topRight,
-                  child: IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, color: Colors.white),
-                  ),
-                ),
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Stack(
+            children: [
+              if (backgroundUrls.isNotEmpty)
+                Positioned.fill(child: CoverLoopVideo(key: ValueKey(_verseChangeCount), urls: backgroundUrls)),
+              Positioned.fill(
+                child: Container(color: Colors.black.withValues(alpha: .45)),
+              ),
+              SafeArea(
+                child: Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                      ),
+                    ),
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 400),
                       transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
@@ -95,6 +115,14 @@ class _VerseOfMomentDialogState extends State<VerseOfMomentDialog> {
                                       textAlign: TextAlign.center,
                                       style: TextStyle(color: Colors.white.withValues(alpha: .65), fontSize: 13),
                                     ),
+                                    if (errorDetail != null) ...[
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        errorDetail!,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.white.withValues(alpha: .4), fontSize: 11),
+                                      ),
+                                    ],
                                   ],
                                 )
                               : Column(
@@ -124,6 +152,8 @@ class _VerseOfMomentDialogState extends State<VerseOfMomentDialog> {
               ],
             ),
           ),
+              ],
+            ),
         ),
       ),
     );

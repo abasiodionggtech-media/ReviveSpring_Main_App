@@ -106,7 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
         OutlinedButton.icon(
           onPressed: () => showDialog<void>(
             context: context,
-            builder: (_) => VerseOfMomentDialog(fetchVerse: controller.fetchRandomVerse),
+            builder: (_) => VerseOfMomentDialog(
+              fetchVerse: controller.fetchRandomVerse,
+              fetchBackgrounds: controller.api.getVerseBackgroundVideoUrls,
+            ),
           ),
           icon: const Icon(Icons.touch_app_outlined),
           label: const Text('Verse of the Moment — tap for a fresh word', style: TextStyle(fontWeight: FontWeight.w800)),

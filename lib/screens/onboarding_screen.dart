@@ -5,6 +5,7 @@ import '../core/app_colors.dart';
 import '../core/app_controller.dart';
 import '../core/app_stage.dart';
 import '../data/app_data.dart';
+import '../services/intro_video_service.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/premium_upgrade_sheet.dart';
 
@@ -39,6 +40,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.initState();
     nameController = TextEditingController(text: controller.user?.fullName ?? '');
     emailController = TextEditingController(text: controller.user?.email ?? '');
+    // Kicks off now so it has the whole onboarding flow to finish
+    // downloading before the user reaches the video screen after this.
+    IntroVideoService.instance.startBackgroundDownload(
+      '${controller.api.mediaBaseUrl}/media/intro-video.mp4',
+    );
   }
 
   @override
@@ -155,7 +161,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       },
     });
     if (!mounted) return;
-    controller.go(AppStage.app);
+    controller.go(AppStage.introVideo);
   }
 
   String get _primaryLabel {

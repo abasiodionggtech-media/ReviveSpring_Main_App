@@ -15,6 +15,7 @@ import '../services/google_auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/play_billing_service.dart';
 import 'app_stage.dart';
+import 'app_typography.dart';
 
 class AppController extends ChangeNotifier {
   AppController({ApiService? api}) : api = api ?? ApiService() {
@@ -28,6 +29,8 @@ class AppController extends ChangeNotifier {
   AppStage stage = AppStage.splash;
   int onboardingIndex = 0;
   String language = 'en';
+  String fontFamily = 'Inter';
+  double fontScale = 1.0;
   bool hasChosenLanguage = false;
   bool signingUp = false;
   bool busy = false;
@@ -173,6 +176,8 @@ class AppController extends ChangeNotifier {
   Future<void> _restoreSession() async {
     final prefs = await SharedPreferences.getInstance();
     language = prefs.getString('language') ?? language;
+    fontFamily = prefs.getString('font_family') ?? fontFamily;
+    fontScale = prefs.getDouble('font_scale') ?? fontScale;
     hasChosenLanguage = prefs.getBool('has_chosen_language') ?? false;
 
     final savedToken = prefs.getString('auth_token');
@@ -187,6 +192,8 @@ class AppController extends ChangeNotifier {
       api.restoreSession(token: savedToken, user: restoredUser);
       user = await api.getCurrentUser();
       language = user?.language ?? language;
+      fontFamily = user?.fontFamily ?? fontFamily;
+      fontScale = user?.fontScale ?? fontScale;
       await _saveSession();
       await refreshMonetizationStatus();
       await _loadAlerts();
@@ -221,6 +228,8 @@ class AppController extends ChangeNotifier {
     await prefs.setString('auth_token', currentToken);
     await prefs.setString('auth_user', jsonEncode(currentUser.toJson()));
     await prefs.setString('language', language);
+    await prefs.setString('font_family', fontFamily);
+    await prefs.setDouble('font_scale', fontScale);
   }
 
   Future<void> _clearSession() async {
@@ -279,6 +288,68 @@ class AppController extends ChangeNotifier {
       try {
         dailyVerse = await api.getDailyVerse();
       } catch (_) {}
+      await _saveSession();
+      notifyListeners();
+      return null;
+    } on ApiException catch (error) {
+      return error.message;
+    }
+  }
+
+  /// Applies a new font immediately (so it feels instant) and syncs it to
+  /// the account in the background. The actual font *file* is fetched and
+  /// cached on-device by the `google_fonts` package the first time it's
+  /// rendered — this just persists which one the user picked.
+  Future<String?> updateFontFamily(String value) async {
+    final normalized = isKnownFont(value) ? value : 'Inter';
+    fontFamily = normalized;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('font_family', normalized);
+    notifyListeners();
+    if (user == null) return null;
+    try {
+      user = await api.updateProfile({'fontFamily': normalized});
+      await _saveSession();
+      return null;
+    } on ApiException catch (error) {
+      return error.message;
+    }
+  }
+
+  Future<String?> updateFontScale(double value) async {
+    final normalized = value.clamp(0.8, 1.4);
+    fontScale = normalized;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('font_scale', normalized);
+    notifyListeners();
+    if (user == null) return null;
+    try {
+      user = await api.updateProfile({'fontScale': normalized});
+      await _saveSession();
+      return null;
+    } on ApiException catch (error) {
+      return error.message;
+    }
+  }
+
+  /// For accounts that already have a password (email sign-up, or a Google
+  /// account that has since linked one) — requires the current password,
+  /// same as before.
+  Future<String?> changePassword({required String currentPassword, required String newPassword}) async {
+    try {
+      await api.changePassword(currentPassword: currentPassword, newPassword: newPassword);
+      return null;
+    } on ApiException catch (error) {
+      return error.message;
+    }
+  }
+
+  /// For Google-signed-in accounts with no password yet — links a new
+  /// password to the account so it can also be used to sign in directly.
+  Future<String?> setPassword(String newPassword) async {
+    try {
+      await api.setPassword(newPassword);
+      user = await api.getCurrentUser();
       await _saveSession();
       notifyListeners();
       return null;
@@ -383,7 +454,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     try {
       final idToken = await GoogleAuthService.instance.getIdToken();
-      user = await api.loginWithGoogle(idToken, language: language);
+      final result = await api.loginWithGoogle(idToken, language: language);
+      if (result['requiresVerification'] == true) {
+        pendingVerifyEmail = result['email']?.toString();
+        _setStage(AppStage.verify);
+        return null;
+      }
+      user = api.cachedUser;
       await _saveSession();
       _stageHistory.clear();
       _setStage(
@@ -397,6 +474,11 @@ class AppController extends ChangeNotifier {
       unawaited(_scheduleHourlyNotificationSync());
       return null;
     } on ApiException catch (error) {
+      if (error.statusCode == 403 && error.data?['requiresVerification'] == true) {
+        pendingVerifyEmail = error.data?['email']?.toString();
+        _setStage(AppStage.verify);
+        return null;
+      }
       return error.message;
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled) {

@@ -1,1 +1,1 @@
-enum AppStage { splash, language, onboarding, auth, verify, app }
+enum AppStage { splash, language, onboarding, introVideo, auth, verify, app }

@@ -61,7 +61,7 @@ const onboardingSteps = [
   OnboardingStep(
     id: 'tour',
     section: 'Welcome',
-    title: 'ReviveMe is your daily space for prayer, growth, and peace.',
+    title: 'ReviveSpring is your daily space for prayer, growth, and peace.',
     type: OnboardingStepType.tour,
     options: [
       OnboardingOption('🙏', 'Prayer'),
@@ -195,7 +195,7 @@ const onboardingSteps = [
   OnboardingStep(
     id: 'spiritualGoals',
     section: 'Spiritual Goals',
-    title: 'What do you most want ReviveMe to help you with?',
+    title: 'What do you most want ReviveSpring to help you with?',
     subtitle: 'Choose up to 2',
     type: OnboardingStepType.multiChoice,
     maxSelect: 2,
@@ -268,7 +268,7 @@ const onboardingSteps = [
   OnboardingStep(
     id: 'notificationPreference',
     section: 'Daily Rhythm',
-    title: 'How would you like ReviveMe to reach you?',
+    title: 'How would you like ReviveSpring to reach you?',
     options: [
       OnboardingOption('🔔', 'Push notifications on my phone'),
       OnboardingOption('📧', 'Daily prayer email'),
@@ -345,7 +345,7 @@ const onboardingSteps = [
   OnboardingStep(
     id: 'premiumChoice',
     section: 'Final Steps',
-    title: 'Unlock everything ReviveMe has to offer',
+    title: 'Unlock everything ReviveSpring has to offer',
     subtitle: 'Unlimited AI chat · Mental Wellness content · No ads',
     type: OnboardingStepType.premium,
   ),

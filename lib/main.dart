@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'core/app_colors.dart';
 import 'core/app_controller.dart';
 import 'core/app_stage.dart';
+import 'core/app_typography.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/auth/verify_screen.dart';
 import 'screens/language_screen.dart';
 import 'screens/main/app_shell.dart';
+import 'screens/intro_video_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/mobile_ads_service.dart';
@@ -49,15 +51,26 @@ class _ReviveSpringAppState extends State<ReviveSpringApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Arial',
         scaffoldBackgroundColor: AppColors.iconCream,
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.deepEmerald),
-        textTheme: ThemeData.light().textTheme.apply(
-          bodyColor: AppColors.deepEmerald,
-          displayColor: AppColors.deepEmerald,
+        textTheme: buildAppTextTheme(
+          controller.fontFamily,
+          ThemeData.light().textTheme.apply(
+            bodyColor: AppColors.deepEmerald,
+            displayColor: AppColors.deepEmerald,
+          ),
         ),
         iconTheme: const IconThemeData(color: AppColors.deepEmerald),
       ),
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: TextScaler.linear(controller.fontScale),
+          ),
+          child: child!,
+        );
+      },
       home: AnimatedBackground(
         child: PopScope(
           canPop: !controller.canHandleSystemBack,
@@ -95,6 +108,10 @@ class _ReviveSpringAppState extends State<ReviveSpringApp> {
               ),
               AppStage.onboarding => OnboardingScreen(
                 key: const ValueKey('onboarding'),
+                controller: controller,
+              ),
+              AppStage.introVideo => IntroVideoScreen(
+                key: const ValueKey('introVideo'),
                 controller: controller,
               ),
               AppStage.auth => AuthScreen(

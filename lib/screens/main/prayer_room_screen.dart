@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
+import '../../widgets/gentle_float.dart';
 
 class PrayerRoomScreen extends StatefulWidget {
   const PrayerRoomScreen({super.key});
@@ -128,11 +129,13 @@ class _PrayerRoomScreenState extends State<PrayerRoomScreen> with SingleTickerPr
                             padding: const EdgeInsets.symmetric(horizontal: 40),
                             child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 600),
-                              child: Text(
-                                finished ? 'Thank You for this time with You, Lord.' : _prompts[_promptIndex],
+                              child: GentleFloat(
                                 key: ValueKey(finished ? -1 : _promptIndex),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white.withValues(alpha: .82), fontSize: 16, height: 1.5),
+                                child: Text(
+                                  finished ? 'Thank You for this time with You, Lord.' : _prompts[_promptIndex],
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white.withValues(alpha: .82), fontSize: 16, height: 1.5),
+                                ),
                               ),
                             ),
                           ),

@@ -8,7 +8,6 @@ import '../../models/goal_item.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/section_header.dart';
 import 'challenges_screen.dart';
-import 'fasting_tracker_screen.dart';
 import 'memory_cards_screen.dart';
 import 'reading_plans_screen.dart';
 
@@ -57,10 +56,13 @@ class GoalsScreen extends StatelessWidget {
         const SizedBox(height: 12),
         _GrowthTile(
           title: 'Fasting Tracker',
-          subtitle: 'Start a fast, track your progress, and finish strong.',
+          subtitle: 'Coming soon.',
           icon: Icons.no_food_outlined,
           color: AppColors.leaf,
-          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FastingTrackerScreen(controller: controller))),
+          badge: 'Soon',
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Fasting Tracker is coming soon! We're still polishing this one.")),
+          ),
         ),
         const SizedBox(height: 12),
         _GrowthTile(
@@ -90,6 +92,7 @@ class _GrowthTile extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.onTap,
+    this.badge,
   });
 
   final String title;
@@ -97,6 +100,7 @@ class _GrowthTile extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +127,14 @@ class _GrowthTile extends StatelessWidget {
                 ],
               ),
             ),
+            if (badge != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: AppColors.sky.withValues(alpha: .16), borderRadius: BorderRadius.circular(999)),
+                child: Text(badge!.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.deepEmerald)),
+              ),
+              const SizedBox(width: 8),
+            ],
             const Icon(Icons.arrow_forward_ios, size: 14),
           ],
         ),

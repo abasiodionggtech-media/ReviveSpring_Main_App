@@ -5,6 +5,9 @@ class AppUser {
     required this.fullName,
     this.language = 'en',
     this.bibleVersion = 'NIV',
+    this.fontFamily = 'Inter',
+    this.hasPassword = false,
+    this.fontScale = 1.0,
     this.role = 'user',
     this.plan = 'free',
     this.verified = true,
@@ -23,6 +26,9 @@ class AppUser {
   final String fullName;
   final String language;
   final String bibleVersion;
+  final String fontFamily;
+  final bool hasPassword;
+  final double fontScale;
   final String role;
   final String plan;
   final bool verified;
@@ -47,6 +53,9 @@ class AppUser {
       fullName: (json['fullName'] ?? json['full_name'] ?? 'Friend').toString(),
       language: (json['language'] ?? 'en').toString(),
       bibleVersion: (json['bibleVersion'] ?? 'NIV').toString(),
+      fontFamily: (json['fontFamily'] ?? 'Inter').toString(),
+      hasPassword: json['hasPassword'] == true,
+      fontScale: ((json['fontScale'] ?? 1.0) as num).toDouble(),
       role: json['role']?.toString() ?? 'user',
       plan: (json['subscriptionStatus'] ?? json['plan'] ?? 'free').toString(),
       verified: (json['verified'] ?? json['isEmailVerified']) != false,
@@ -67,6 +76,9 @@ class AppUser {
         'fullName': fullName,
         'language': language,
         'bibleVersion': bibleVersion,
+        'fontFamily': fontFamily,
+        'hasPassword': hasPassword,
+        'fontScale': fontScale,
         'role': role,
         'plan': plan,
         'verified': verified,

@@ -7,6 +7,7 @@ import '../../core/app_controller.dart';
 import '../../core/app_strings.dart';
 import '../../screens/auth/reset_password_screen.dart';
 import '../../widgets/app_buttons.dart';
+import '../../widgets/appearance_settings_sheet.dart';
 import '../../widgets/glass_panel.dart';
 import '../../widgets/premium_upgrade_sheet.dart';
 import '../../widgets/section_header.dart';
@@ -297,11 +298,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
         GlassPanel(
           child: ListTile(
             leading: const Icon(
+              Icons.font_download_outlined,
+              color: AppColors.deepEmerald,
+            ),
+            title: Text(t('Appearance', 'Apparence')),
+            subtitle: Text(
+              t(
+                '${widget.controller.fontFamily} · ${(widget.controller.fontScale * 100).round()}% text size',
+                '${widget.controller.fontFamily} · ${(widget.controller.fontScale * 100).round()}% taille du texte',
+              ),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => AppearanceSettingsSheet.show(context, widget.controller),
+          ),
+        ),
+        const SizedBox(height: 14),
+        GlassPanel(
+          child: ListTile(
+            leading: const Icon(
               Icons.verified_user_outlined,
               color: AppColors.deepEmerald,
             ),
             title: Text(t('Sign-In Method', 'Methode de connexion')),
             subtitle: Text((user?.authProvider ?? 'email').toUpperCase()),
+          ),
+        ),
+        const SizedBox(height: 14),
+        GlassPanel(
+          child: ListTile(
+            leading: Icon(
+              user?.hasPassword == true ? Icons.lock_outline : Icons.lock_open_outlined,
+              color: AppColors.deepEmerald,
+            ),
+            title: Text(
+              user?.hasPassword == true
+                  ? t('Change Password', 'Changer le mot de passe')
+                  : t('Create a Password', 'Creer un mot de passe'),
+            ),
+            subtitle: Text(
+              user?.hasPassword == true
+                  ? t('Update the password for this account', 'Mettez a jour le mot de passe de ce compte')
+                  : t(
+                      'Add a password so you can also sign in with email, not just Google',
+                      'Ajoutez un mot de passe pour aussi vous connecter par e-mail, pas seulement avec Google',
+                    ),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => _PasswordSheet.show(context, widget.controller, hasPassword: user?.hasPassword == true),
           ),
         ),
         const SizedBox(height: 14),
@@ -1063,6 +1106,166 @@ class _ProfileReminderWheelState<T> extends State<_ProfileReminderWheel<T>> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Bottom sheet used for both "Create a Password" (Google accounts with no
+/// password yet) and "Change Password" (accounts that already have one).
+/// The verification requirement is unchanged for existing passwords: the
+/// current password is still required before a new one is accepted.
+class _PasswordSheet {
+  static Future<void> show(BuildContext context, AppController controller, {required bool hasPassword}) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _PasswordSheetBody(controller: controller, hasPassword: hasPassword),
+    );
+  }
+}
+
+class _PasswordSheetBody extends StatefulWidget {
+  const _PasswordSheetBody({required this.controller, required this.hasPassword});
+
+  final AppController controller;
+  final bool hasPassword;
+
+  @override
+  State<_PasswordSheetBody> createState() => _PasswordSheetBodyState();
+}
+
+class _PasswordSheetBodyState extends State<_PasswordSheetBody> {
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final newPassword = _newController.text;
+    final confirm = _confirmController.text;
+    if (newPassword.length < 6) {
+      setState(() => _error = 'Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword != confirm) {
+      setState(() => _error = "Passwords don't match.");
+      return;
+    }
+    if (widget.hasPassword && _currentController.text.isEmpty) {
+      setState(() => _error = 'Enter your current password.');
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final error = widget.hasPassword
+        ? await widget.controller.changePassword(currentPassword: _currentController.text, newPassword: newPassword)
+        : await widget.controller.setPassword(newPassword);
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          widget.hasPassword ? 'Password updated.' : 'Password created — you can now sign in with email too.',
+        ),
+        backgroundColor: AppColors.deepEmerald,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 22,
+          right: 22,
+          top: 18,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 54,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppColors.deepEmerald.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              widget.hasPassword ? 'Change Password' : 'Create a Password',
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              widget.hasPassword
+                  ? 'Enter your current password, then choose a new one.'
+                  : 'Add a password so you can sign in with either Google or your email from now on.',
+              style: const TextStyle(color: AppColors.muted, height: 1.4, fontSize: 13),
+            ),
+            const SizedBox(height: 18),
+            if (widget.hasPassword) ...[
+              TextField(
+                controller: _currentController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Current password'),
+              ),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _newController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New password'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _confirmController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Confirm new password'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: const TextStyle(color: AppColors.coral, fontSize: 13)),
+            ],
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _submitting ? null : _submit,
+                child: Text(_submitting ? 'Saving...' : (widget.hasPassword ? 'Update Password' : 'Create Password')),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

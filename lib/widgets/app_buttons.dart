@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/app_colors.dart';
+import '../core/app_tokens.dart';
 
 class AnimatedPrimaryButton extends StatefulWidget {
   const AnimatedPrimaryButton({
@@ -30,7 +32,12 @@ class _AnimatedPrimaryButtonState extends State<AnimatedPrimaryButton> {
       onTapDown: enabled ? (_) => setState(() => pressed = true) : null,
       onTapCancel: enabled ? () => setState(() => pressed = false) : null,
       onTapUp: enabled ? (_) => setState(() => pressed = false) : null,
-      onTap: enabled ? widget.onPressed : null,
+      onTap: enabled
+          ? () {
+              HapticFeedback.lightImpact();
+              widget.onPressed!();
+            }
+          : null,
       child: AnimatedScale(
         duration: const Duration(milliseconds: 150),
         scale: pressed ? .97 : 1,
@@ -41,7 +48,7 @@ class _AnimatedPrimaryButtonState extends State<AnimatedPrimaryButton> {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             decoration: BoxDecoration(
               gradient: const LinearGradient(colors: [AppColors.deepEmerald, Color(0xFF0B3F35)]),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               boxShadow: [BoxShadow(color: AppColors.deepEmerald.withValues(alpha: .22), blurRadius: 26, offset: const Offset(0, 12))],
             ),
             child: Row(

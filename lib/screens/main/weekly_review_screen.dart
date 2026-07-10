@@ -19,6 +19,7 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
   final _reflectionController = TextEditingController();
   Map<String, dynamic>? _review;
   bool _loading = true;
+  bool _hasError = false;
   bool _saving = false;
 
   @override
@@ -34,6 +35,10 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _hasError = false;
+    });
     try {
       final review = await widget.controller.api.getWeeklyReview(language: widget.controller.language);
       if (mounted) {
@@ -43,6 +48,7 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
         });
       }
     } catch (_) {
+      if (mounted) setState(() => _hasError = true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -79,7 +85,27 @@ class _WeeklyReviewScreenState extends State<WeeklyReviewScreen> {
       appBar: AppBar(backgroundColor: AppColors.panel, elevation: 0, title: const Text('Weekly Spiritual Review')),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.deepEmerald))
-          : ListView(
+          : _hasError
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined, color: AppColors.coral, size: 32),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Couldn't load your weekly review right now.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.muted, height: 1.4),
+                        ),
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('Try Again')),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 40),
               children: [
                 Text(
