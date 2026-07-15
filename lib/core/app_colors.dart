@@ -16,7 +16,10 @@ class AppColors {
   static const gold = Color(0xFFB58B2B);
 
   static const ink = deepEmerald;
-  static const panel = Color(0xFFFFFFFF);
+  // The page behind the glass. Deliberately NOT pure white — glossy white
+  // panels are invisible on a pure white page, so this soft green-tinted
+  // off-white is what gives the gloss something to stand against.
+  static const panel = Color(0xFFF1F6F3);
   static const glass = Color(0xF2FFFFFF);
   static const leaf = leafGreen;
   static const coral = Color(0xFFB85B48);

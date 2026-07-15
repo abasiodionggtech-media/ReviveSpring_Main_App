@@ -67,20 +67,40 @@ class AppController extends ChangeNotifier {
   int get unreadAlertCount =>
       alerts.where((item) => item['readAt'] == null).length;
   bool get isPremiumUser => user?.isPremium == true;
-  bool get shouldShowAds {
-    if (monetization.isEmpty) return false;
-    final ads = monetization['ads'];
-    final enabled = ads is Map ? ads['enabled'] != false : true;
-    final bannerEnabled = ads is Map ? ads['bannerEnabled'] != false : true;
-    return signedIn && !isPremiumUser && enabled && bannerEnabled;
+
+  /// Standard tier — pays, but has a monthly AI allowance rather than
+  /// unlimited. Premium counts as "at least standard" for anything that only
+  /// needs a paid plan.
+  bool get isStandardUser => user?.plan == 'standard' || isPremiumUser;
+  /// Whether to show the gentle upgrade card on Home. (This used to be the
+  /// "show ads?" flag — ads are gone, so it's now just a plan check.)
+  bool get shouldShowUpgradeCard => signedIn && !isPremiumUser;
+
+  /// Whether AI messages are unlimited (Premium, admin, or still in trial).
+  bool get aiUnlimited {
+    final ai = monetization['ai'];
+    if (ai is Map && ai['unlimited'] is bool) return ai['unlimited'] as bool;
+    return isPremiumUser;
   }
 
-  int get aiDailyRemaining {
+  /// AI messages left THIS MONTH. Standard gets a fixed monthly allowance that
+  /// does not roll over. Returns null when there's no limit to speak of.
+  int? get aiRemainingThisMonth {
+    if (aiUnlimited) return null;
     final ai = monetization['ai'];
-    if (ai is Map && ai['remainingToday'] is num) {
-      return (ai['remainingToday'] as num).toInt();
+    if (ai is Map && ai['remainingThisMonth'] is num) {
+      return (ai['remainingThisMonth'] as num).toInt();
     }
-    return isPremiumUser ? 5 : 0;
+    return 0;
+  }
+
+  /// The size of the monthly allowance (20 for Standard, by default).
+  int get aiMonthlyAllowance {
+    final ai = monetization['ai'];
+    if (ai is Map && ai['monthlyAllowance'] is num) {
+      return (ai['monthlyAllowance'] as num).toInt();
+    }
+    return 20;
   }
 
   List<Map<String, dynamic>> get subscriptionPlans {
@@ -103,9 +123,13 @@ class AppController extends ChangeNotifier {
     if (plan != null && plan['googlePlayProductId'] != null) {
       return plan['googlePlayProductId'].toString();
     }
+    // These must match the Subscription product IDs in Google Play Console
+    // exactly. The subscription itself is monthly; the 3-month intro is a
+    // "single payment" offer attached to the base plan, not a separate
+    // product ID — so there's no _3mo suffix here.
     return tier == 'standard'
-        ? 'revivespring_standard_3mo'
-        : 'revivespring_premium_3mo';
+        ? 'revivespring_standard'
+        : 'revivespring_premium';
   }
 
   /// A short "From $X / month" label for the dismissible home banner —
@@ -672,20 +696,6 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>> unlockAiForFreeUser() async {
-    final result = await api.claimAiUnlock();
-    monetization = {
-      ...monetization,
-      'ai': {
-        ...(monetization['ai'] is Map
-            ? Map<String, dynamic>.from(monetization['ai'])
-            : <String, dynamic>{}),
-        ...result,
-      },
-    };
-    notifyListeners();
-    return result;
-  }
 
   Map<String, dynamic> _buildSubscriptionPayload(
     PlayBillingResult result, {
