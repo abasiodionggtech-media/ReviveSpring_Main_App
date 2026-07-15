@@ -190,7 +190,7 @@ class _MentorshipScreenState extends State<MentorshipScreen> {
                           ),
                           AnimatedPrimaryButton(
                             label: 'Request',
-                            icon: Icons.person_add_alt_1,
+                            icon: Icons.handshake_outlined,
                             busy: busy,
                             onPressed: busy ? null : () => _requestMentor(mentor['mentor_user_id'].toString()),
                           ),

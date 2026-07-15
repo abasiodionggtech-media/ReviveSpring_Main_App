@@ -6,12 +6,14 @@ import '../../core/app_colors.dart';
 import '../../core/app_controller.dart';
 import '../../data/app_data.dart';
 import '../../models/prayer_response.dart';
+import '../../services/video_cache_service.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/content_tiles.dart';
 import '../../widgets/daily_checkin_modal.dart';
 import '../../widgets/daily_manna_card.dart';
 import '../../widgets/declaration_card.dart';
 import '../../widgets/glass_panel.dart';
+import '../../widgets/mood_video_card.dart';
 import '../../widgets/growth_score_card.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/seasonal_event_banner.dart';
@@ -42,6 +44,21 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => verseIndex = (verseIndex + 1) % dailyVerses.length);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowCheckIn());
+    _warmVerseBackgroundCache();
+  }
+
+  /// Quietly downloads the Verse of the Moment background videos once so they
+  /// play instantly afterwards — and keep working with no internet at all.
+  /// Runs in the background; failures are ignored (playback falls back to
+  /// streaming), so this can never block or break the home screen.
+  Future<void> _warmVerseBackgroundCache() async {
+    try {
+      final urls = await widget.controller.api.getVerseBackgroundVideoUrls();
+      await VideoCacheService.instance.warmCache(urls);
+    } catch (_) {
+      // Offline or server unreachable — nothing to do, we'll try again on
+      // the next launch.
+    }
   }
 
   void _maybeShowCheckIn() {
@@ -263,6 +280,12 @@ class _CenteredTimedPrayerState extends State<CenteredTimedPrayer> {
           Text(widget.response.prayer, style: const TextStyle(height: 1.55)),
           const SizedBox(height: 14),
           Text(widget.response.action, style: const TextStyle(color: AppColors.leaf)),
+          // Plays a video for this mood if one exists (e.g. the anxiety video).
+          // Renders nothing at all for moods without one.
+          MoodVideoCard(
+            moodId: widget.mood,
+            mediaBaseUrl: widget.controller.api.mediaBaseUrl,
+          ),
           const SizedBox(height: 16),
           LinearProgressIndicator(value: recorded ? 1 : elapsed / _prayerRecordSeconds, color: AppColors.leaf),
           const SizedBox(height: 10),

@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/app_controller.dart';
-import '../../widgets/ad_banner_card.dart';
+import '../../widgets/curved_nav_bar.dart';
 import '../../widgets/premium_upgrade_sheet.dart';
 import 'ai_screen.dart';
+import 'bible_screen.dart';
 import 'customer_care_screen.dart';
 import 'goals_screen.dart';
 import 'home_screen.dart';
@@ -95,7 +96,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       JournalScreen(controller: widget.controller),
       GoalsScreen(controller: widget.controller),
       WellnessScreen(controller: widget.controller, onNavigate: selectTab),
-      AiScreen(controller: widget.controller),
+      BibleScreen(controller: widget.controller),
       ProfileScreen(controller: widget.controller),
       CustomerCareScreen(controller: widget.controller, onBack: handleBack),
       NotificationsScreen(controller: widget.controller, onBack: handleBack),
@@ -125,7 +126,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 ),
                 child: screens[tab],
               ),
-              if (widget.controller.shouldShowAds &&
+              if (widget.controller.shouldShowUpgradeCard &&
                   tab == 0 &&
                   !_premiumCardDismissed)
                 Positioned(
@@ -282,62 +283,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             ],
           ),
         ),
+        // AI has left the navigation (Bible took its place) — it now lives as a
+        // floating button above the bar, so it's still one tap away.
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 96),
+          child: _AiFab(controller: widget.controller),
+        ),
         bottomNavigationBar: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.controller.shouldShowAds && tab <= 6) ...[
-                const Center(child: AdBannerCard()),
-                const SizedBox(height: 8),
-              ],
-              ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: NavigationBar(
-                  height: 72,
-                  selectedIndex: tab > 6 ? 6 : tab,
-                  backgroundColor: AppColors.glass,
-                  indicatorColor: AppColors.deepEmerald.withValues(alpha: .24),
-                  onDestinationSelected: selectTab,
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home),
-                      label: 'Home',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.menu_book_outlined),
-                      selectedIcon: Icon(Icons.menu_book),
-                      label: 'Pray',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.edit_note),
-                      selectedIcon: Icon(Icons.edit_note),
-                      label: 'Journal',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.flag_outlined),
-                      selectedIcon: Icon(Icons.flag),
-                      label: 'Goals',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.spa_outlined),
-                      selectedIcon: Icon(Icons.spa),
-                      label: 'Wellness',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.auto_awesome_outlined),
-                      selectedIcon: Icon(Icons.auto_awesome),
-                      label: 'AI',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.person_outline),
-                      selectedIcon: Icon(Icons.person),
-                      label: 'Profile',
-                    ),
-                  ],
-                ),
-              ),
+          child: CurvedNavBar(
+            currentIndex: tab > 6 ? 6 : tab,
+            onTap: selectTab,
+            items: const [
+              CurvedNavItem(icon: Icons.home_rounded, label: 'Home'),
+              CurvedNavItem(icon: Icons.volunteer_activism_rounded, label: 'Pray'),
+              CurvedNavItem(icon: Icons.edit_note_rounded, label: 'Journal'),
+              CurvedNavItem(icon: Icons.flag_rounded, label: 'Goals'),
+              CurvedNavItem(icon: Icons.spa_rounded, label: 'Wellness'),
+              // AI has left the nav — Bible takes its place. AI is now the
+              // floating button above the bar.
+              CurvedNavItem(icon: Icons.menu_book_rounded, label: 'Bible'),
+              CurvedNavItem(icon: Icons.person_rounded, label: 'Profile'),
             ],
           ),
         ),
@@ -394,6 +360,61 @@ class _HeaderActionButton extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// The AI companion, lifted out of the navigation bar.
+class _AiFab extends StatelessWidget {
+  const _AiFab({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => Scaffold(
+                backgroundColor: AppColors.panel,
+                appBar: AppBar(
+                  backgroundColor: AppColors.panel,
+                  elevation: 0,
+                  title: const Text('AI Companion'),
+                ),
+                body: AiScreen(controller: controller),
+              ),
+            ),
+          ),
+          child: Ink(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF2E6B5B), AppColors.deepEmerald, Color(0xFF08322A)],
+                stops: [0, .55, 1],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.deepEmerald.withValues(alpha: .6),
+                  blurRadius: 24,
+                  spreadRadius: -6,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 24),
           ),
         ),
       ),

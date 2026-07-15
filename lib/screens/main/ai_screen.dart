@@ -5,7 +5,6 @@ import '../../core/app_colors.dart';
 import '../../core/app_controller.dart';
 import '../../models/chat_message.dart';
 import '../../services/ai_service.dart';
-import '../../services/mobile_ads_service.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/glass_panel.dart';
@@ -65,43 +64,17 @@ class _AiScreenState extends State<AiScreen> {
   Future<void> send([String? suggestion]) async {
     final text = (suggestion ?? input.text).trim();
     if (text.isEmpty || typing) return;
-    String? unlockToken;
-    if (!widget.controller.isPremiumUser) {
-      final approved = await _showAiAdGate();
-      if (!approved) return;
-      final rewarded = await MobileAdsService.instance.showRewardedAiUnlockAd();
-      if (!rewarded) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              t(
-                'The ad was not completed, so AI access was not unlocked yet.',
-                'La pub n a pas ete terminee, donc l acces IA n a pas encore ete debloque.',
-              ),
-            ),
-          ),
-        );
-        return;
-      }
-      try {
-        final unlock = await widget.controller.unlockAiForFreeUser();
-        unlockToken = (unlock['unlockToken'] ?? '').toString();
-      } catch (_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              t(
-                'Daily AI limit reached or AI access is unavailable right now.',
-                'La limite quotidienne de l IA est atteinte ou l acces est indisponible pour le moment.',
-              ),
-            ),
-          ),
-        );
-        return;
-      }
+
+    // Ads are gone. Access is now purely plan-based:
+    //   Premium  → unlimited
+    //   Standard → 20 messages a month (no rollover; the backend counts them)
+    //   anyone else (trial expired / free) → upgrade prompt
+    if (!widget.controller.isPremiumUser && !widget.controller.isStandardUser) {
+      if (!mounted) return;
+      await _showUpgradeSheet();
+      return;
     }
+
     setState(() {
       input.clear();
       typing = true;
@@ -113,7 +86,7 @@ class _AiScreenState extends State<AiScreen> {
       sessionId: sessionId,
       userEmail: widget.controller.user?.email,
       authToken: widget.controller.api.token,
-      unlockToken: unlockToken,
+      unlockToken: null,
       history: messages,
     );
     if (!mounted) return;
@@ -166,32 +139,11 @@ class _AiScreenState extends State<AiScreen> {
     });
   }
 
-  Future<bool> _showAiAdGate() async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => _AiRewardDialog(
-            title: t(
-              'Watch this short ad to use AI',
-              'Regardez cette courte pub pour utiliser l IA',
-            ),
-            body: t(
-              'Free users can unlock one AI use by viewing this short sponsor message. You can do this up to 5 times per day.',
-              'Les utilisateurs gratuits peuvent debloquer une utilisation de l IA en regardant ce court message sponsorise. Vous pouvez le faire jusqu a 5 fois par jour.',
-            ),
-            actionLabel: t('Watch ad now', 'Regarder la pub maintenant'),
-            cancelLabel: t('Cancel', 'Annuler'),
-            sponsorCopy: t(
-              'ReviveSpring Premium\nNo ads. Unlimited AI. Full access.',
-              'ReviveSpring Premium\nSans pubs. IA illimitee. Acces complet.',
-            ),
-            countdownLabel: (seconds) => t(
-              'Starting in ${seconds}s...',
-              'Demarrage dans ${seconds}s...',
-            ),
-          ),
-        ) ??
-        false;
+  /// Shown when someone with no AI entitlement tries to send a message.
+  /// (Ads are gone — the only route to AI is a subscription.)
+  Future<void> _showUpgradeSheet() async {
+    // PremiumUpgradeSheet exposes a static show() — it isn't a widget.
+    await PremiumUpgradeSheet.show(context, widget.controller);
   }
 
   @override
@@ -315,7 +267,7 @@ class _AiScreenState extends State<AiScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  t('Free AI access', 'Acces IA gratuit'),
+                  t('AI messages this month', 'Messages IA ce mois-ci'),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
@@ -324,16 +276,16 @@ class _AiScreenState extends State<AiScreen> {
                 const SizedBox(height: 6),
                 Text(
                   t(
-                    'Watch one short ad before each AI use. Daily limit: 5.',
-                    'Regardez une courte pub avant chaque utilisation de l IA. Limite quotidienne : 5.',
+                    'Standard includes ${widget.controller.aiMonthlyAllowance} AI messages each month. Unused messages don\u2019t roll over.',
+                    'Standard inclut ${widget.controller.aiMonthlyAllowance} messages IA par mois. Les messages non utilises ne sont pas reportes.',
                   ),
                   style: const TextStyle(color: AppColors.muted, height: 1.45),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   t(
-                    'Remaining today: ${widget.controller.aiDailyRemaining}',
-                    'Restant aujourd hui : ${widget.controller.aiDailyRemaining}',
+                    '${widget.controller.aiRemainingThisMonth ?? 0} remaining',
+                    '${widget.controller.aiRemainingThisMonth ?? 0} restants',
                   ),
                   style: const TextStyle(
                     color: AppColors.deepEmerald,
@@ -462,89 +414,9 @@ class _AiScreenState extends State<AiScreen> {
   }
 }
 
-class _AiRewardDialog extends StatefulWidget {
-  const _AiRewardDialog({
-    required this.title,
-    required this.body,
-    required this.actionLabel,
-    required this.cancelLabel,
-    required this.sponsorCopy,
-    required this.countdownLabel,
-  });
 
-  final String title;
-  final String body;
-  final String actionLabel;
-  final String cancelLabel;
-  final String sponsorCopy;
-  final String Function(int seconds) countdownLabel;
-
-  @override
-  State<_AiRewardDialog> createState() => _AiRewardDialogState();
-}
-
-class _AiRewardDialogState extends State<_AiRewardDialog> {
-  int secondsLeft = 5;
-
-  @override
-  void initState() {
-    super.initState();
-    Future.doWhile(() async {
-      if (!mounted || secondsLeft <= 0) return false;
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (!mounted) return false;
-      setState(() => secondsLeft -= 1);
-      return secondsLeft > 0;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ready = secondsLeft <= 0;
-    return AlertDialog(
-      title: Text(widget.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.body),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.deepEmerald.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              widget.sponsorCopy,
-              style: const TextStyle(fontWeight: FontWeight.w800, height: 1.5),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            ready ? widget.actionLabel : widget.countdownLabel(secondsLeft),
-            style: const TextStyle(
-              color: AppColors.deepEmerald,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(widget.cancelLabel),
-        ),
-        FilledButton(
-          onPressed: ready ? () => Navigator.of(context).pop(true) : null,
-          child: Text(widget.actionLabel),
-        ),
-      ],
-    );
-  }
-}
-
+/// A feature tile on the AI screen. Locked features show a "Premium" badge and
+/// route to the upgrade sheet instead of the feature.
 class _PremiumFeatureButton extends StatelessWidget {
   const _PremiumFeatureButton({
     required this.label,
@@ -560,14 +432,62 @@ class _PremiumFeatureButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(isPremium ? icon : Icons.lock_outline, size: 18),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onPressed,
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        foregroundColor: AppColors.deepEmerald,
-        side: BorderSide(color: AppColors.deepEmerald.withValues(alpha: .3)),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFFFFFF), Color(0xFFEDF4F1)],
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: .9)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.deepEmerald.withValues(alpha: .22),
+              blurRadius: 12,
+              spreadRadius: -6,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 17, color: AppColors.deepEmerald),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                color: AppColors.deepEmerald,
+              ),
+            ),
+            if (!isPremium) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.coral.withValues(alpha: .16),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'PREMIUM',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .5,
+                    color: AppColors.coral,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
