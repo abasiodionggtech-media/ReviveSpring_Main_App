@@ -90,7 +90,7 @@ class _PremiumUpgradeSheetBodyState extends State<_PremiumUpgradeSheetBody> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(22, 18, 22, 26),
         decoration: const BoxDecoration(
-          color: AppColors.panel,
+          color: AppColors.iconCream,
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
         child: Column(

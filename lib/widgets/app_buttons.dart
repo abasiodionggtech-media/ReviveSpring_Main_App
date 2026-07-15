@@ -45,23 +45,66 @@ class _AnimatedPrimaryButtonState extends State<AnimatedPrimaryButton> {
           opacity: enabled ? 1 : .68,
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [AppColors.deepEmerald, Color(0xFF0B3F35)]),
+              // three-stop gradient: lit crown, body, shaded base — a dome
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF2E6B5B), AppColors.deepEmerald, Color(0xFF08322A)],
+                stops: [0.0, 0.55, 1.0],
+              ),
               borderRadius: BorderRadius.circular(AppRadius.lg),
-              boxShadow: [BoxShadow(color: AppColors.deepEmerald.withValues(alpha: .22), blurRadius: 26, offset: const Offset(0, 12))],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (widget.busy)
-                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.iconCream))
-                else ...[
-                  Text(widget.label, style: const TextStyle(color: AppColors.iconCream, fontWeight: FontWeight.w900, fontSize: 16)),
-                  const SizedBox(width: 10),
-                  Icon(widget.icon, color: AppColors.iconCream),
-                ],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.deepEmerald.withValues(alpha: .45),
+                  blurRadius: 24,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 12),
+                ),
               ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: Stack(
+                children: [
+                  // the specular highlight along the top of the dome
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 26,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withValues(alpha: .34),
+                              Colors.white.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (widget.busy)
+                          const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.iconCream))
+                        else ...[
+                          Text(widget.label, style: const TextStyle(color: AppColors.iconCream, fontWeight: FontWeight.w900, fontSize: 16)),
+                          const SizedBox(width: 10),
+                          Icon(widget.icon, color: AppColors.iconCream),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

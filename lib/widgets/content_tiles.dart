@@ -158,15 +158,60 @@ class _IconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = size * .32;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .16),
-        borderRadius: BorderRadius.circular(size * .32),
-        border: Border.all(color: color.withValues(alpha: .2)),
+        // a bead of coloured glass: lit at the crown, saturated at the base
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            color.withValues(alpha: .08),
+            color.withValues(alpha: .26),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: Colors.white.withValues(alpha: .75)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: .28),
+            blurRadius: 10,
+            spreadRadius: -5,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
-      child: Icon(icon, color: color, size: iconSize),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Stack(
+          children: [
+            // the dome highlight
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: size * .5,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withValues(alpha: .68),
+                        Colors.white.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Center(child: Icon(icon, color: color, size: iconSize)),
+          ],
+        ),
+      ),
     );
   }
 }

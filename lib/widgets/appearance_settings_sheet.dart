@@ -67,7 +67,7 @@ class _AppearanceSheetBodyState extends State<_AppearanceSheetBody> {
         padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * .82),
         decoration: const BoxDecoration(
-          color: AppColors.panel,
+          color: AppColors.iconCream,
           borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
         ),
         child: Column(
