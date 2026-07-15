@@ -44,16 +44,39 @@ class _IntroVideoScreenState extends State<IntroVideoScreen> {
     }
 
     try {
-      await controller.initialize();
-      if (!mounted) return;
+      // If the file is missing on the server (404) or the network stalls,
+      // initialize() can otherwise hang forever and leave the user staring
+      // at a blank black card. Time it out and fail visibly instead.
+      await controller.initialize().timeout(const Duration(seconds: 15));
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      // Surfaces decode/network errors that happen *after* initialize()
+      // succeeds — otherwise those also show as a silent black rectangle.
+      controller.addListener(_onVideoTick);
+      if (controller.value.hasError) {
+        throw Exception(controller.value.errorDescription ?? 'playback error');
+      }
+
+      await controller.setVolume(1);
+      await controller.play();
+
       setState(() {
         _videoController = controller;
         _preparing = false;
+        _failed = false;
       });
-      controller.play();
-      controller.addListener(_onVideoTick);
     } catch (_) {
-      if (mounted) setState(() { _failed = true; _preparing = false; });
+      await controller.dispose();
+      if (mounted) {
+        setState(() {
+          _videoController = null;
+          _failed = true;
+          _preparing = false;
+        });
+      }
     }
   }
 
@@ -61,6 +84,13 @@ class _IntroVideoScreenState extends State<IntroVideoScreen> {
     final controller = _videoController;
     if (controller == null) return;
     final value = controller.value;
+    if (value.hasError && !_failed && mounted) {
+      setState(() {
+        _failed = true;
+        _preparing = false;
+      });
+      return;
+    }
     if (value.isInitialized && !value.isPlaying && value.position >= value.duration && value.duration > Duration.zero) {
       _finish();
     }
