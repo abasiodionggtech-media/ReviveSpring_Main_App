@@ -67,7 +67,7 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(height: 7),
             Text(
               t(
-                'Sign in to unlock your AI prayer companion.',
+                'Everything for your daily walk, in one place.',
                 'Connectez-vous pour acceder a votre compagnon de priere IA.',
               ),
               textAlign: TextAlign.center,
