@@ -308,6 +308,26 @@ class ApiService {
   }
 
   // ── Verse of the Moment ──────────────────────────────────────
+
+  // ── Bible (free & open — no auth needed) ──────────────────────────────
+  Future<List<Map<String, dynamic>>> getBibleBooks() async {
+    final data = await _request('GET', '/bible/books', authed: false);
+    final list = (data as Map)['books'] as List;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getBibleTranslations() async {
+    final data = await _request('GET', '/bible/translations', authed: false);
+    final list = (data as Map)['translations'] as List;
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> getBibleChapter(String translation, String book, int chapter) async {
+    final encoded = Uri.encodeComponent(book);
+    final data = await _request('GET', '/bible/$translation/$encoded/$chapter', authed: false);
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> getRandomVerse() async {
     final data = await _request('GET', '/daily-verse/random');
     return data is Map ? Map<String, dynamic>.from(data) : {};
@@ -741,10 +761,6 @@ class ApiService {
     return data is Map ? Map<String, dynamic>.from(data) : {};
   }
 
-  Future<Map<String, dynamic>> claimAiUnlock() async {
-    final data = await _request('POST', '/monetization/ai/unlock', body: {});
-    return data is Map ? Map<String, dynamic>.from(data) : {};
-  }
 
   Future<AppUser> syncMobileSubscription(Map<String, dynamic> body) async {
     final data = await _request(
